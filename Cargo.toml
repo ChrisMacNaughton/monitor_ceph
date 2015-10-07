@@ -5,3 +5,7 @@ authors = ["Chris MacNaughton <chmacnaughton@gmail.com>"]
 [dependencies]
 rustc-serialize = "*"
 yaml-rust = "*"
+time="*"
+ease="*"
+log = "*"
+simple_logger = "*"
