@@ -5,6 +5,7 @@ use yaml_rust::YamlLoader;
 use std::fs::File;
 use std::io::prelude::*;
 use std::process::Command;
+use std::sync::mpsc::Receiver;
 macro_rules! parse_opt (
     ($name:ident, $doc:expr) => (
     let $name: Option<String> = match $doc.as_str() {
@@ -110,24 +111,44 @@ fn i_hate_unwraps(json: &rustc_serialize::json::Json, key: &str) -> Result<rustc
 }
 
 fn main() {
-    let json = match get_ceph_stats(){
-        Ok(json) => json,
-        Err(_) => "{}".to_string(),
-    };
 
-    let obj = Json::from_str(json.as_ref()).unwrap();
-    // println!("{:?}", obj);
-
-    let ceph_event = CephHealth {
-        ops: parse_u64(i_hate_unwraps(&obj["pgmap"], &"op_per_sec")),
-        write_bytes_sec: parse_u64(i_hate_unwraps(&obj["pgmap"], "write_bytes_sec")),
-        data: parse_u64(i_hate_unwraps(&obj["pgmap"], "data_bytes")),
-        bytes_used: parse_u64(i_hate_unwraps(&obj["pgmap"], "bytes_used")),
-        bytes_avail: parse_u64(i_hate_unwraps(&obj["pgmap"], "bytes_avail")),
-        bytes_total: parse_u64(i_hate_unwraps(&obj["pgmap"], "bytes_total")),
-    };
+    let periodic = timer_periodic(1000);
 
     let args = get_config();
     println!("{:?}", args);
-    println!("{:?}", ceph_event);
+    loop{
+        let _ = periodic.recv();
+        let json = match get_ceph_stats(){
+            Ok(json) => json,
+            Err(_) => "{}".to_string(),
+        };
+
+        let obj = Json::from_str(json.as_ref()).unwrap();
+        // println!("{:?}", obj);
+
+        let ceph_event = CephHealth {
+            ops: parse_u64(i_hate_unwraps(&obj["pgmap"], &"op_per_sec")),
+            write_bytes_sec: parse_u64(i_hate_unwraps(&obj["pgmap"], "write_bytes_sec")),
+            data: parse_u64(i_hate_unwraps(&obj["pgmap"], "data_bytes")),
+            bytes_used: parse_u64(i_hate_unwraps(&obj["pgmap"], "bytes_used")),
+            bytes_avail: parse_u64(i_hate_unwraps(&obj["pgmap"], "bytes_avail")),
+            bytes_total: parse_u64(i_hate_unwraps(&obj["pgmap"], "bytes_total")),
+        };
+
+        println!("{:?}", ceph_event);
+    }
+
+}
+
+fn timer_periodic(ms: u32) -> Receiver<()> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep_ms(ms);
+            if tx.send(()).is_err() {
+                break;
+            }
+        }
+    });
+    rx
 }
