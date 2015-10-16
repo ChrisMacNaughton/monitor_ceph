@@ -3,6 +3,7 @@ name = "ceph_monitor"
 version = "0.1.0"
 dependencies = [
  "ease 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "influent 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "simple_logger 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -87,6 +88,15 @@ dependencies = [
  "typeable 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicase 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 0.2.37 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "influent"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "hyper 0.6.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
