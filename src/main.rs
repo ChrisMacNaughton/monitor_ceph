@@ -126,7 +126,8 @@ struct CephHealth {
     data: f64,
     bytes_used: f64,
     bytes_avail: f64,
-    bytes_total: f64
+    bytes_total: f64,
+    num_osds: i64
 }
 
 #[test]
@@ -426,7 +427,7 @@ fn log_to_influx(args: &Args, ceph_event: &CephHealth) {
         measurement.add_field("used", Value::Float(ceph_event.bytes_used));
         measurement.add_field("avail", Value::Float(ceph_event.bytes_avail));
         measurement.add_field("total", Value::Float(ceph_event.bytes_total));
-
+        measurement.add_field("osds", Value::Integer(ceph_event.num_osds));
         let res = client.write_one(measurement, None);
 
         debug!("{:?}", res);
@@ -473,6 +474,7 @@ fn main() {
             bytes_used: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_used"))),
             bytes_avail: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_avail"))),
             bytes_total: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_total"))),
+            num_osds: parse_i64(i_hate_unwraps(&obj["osdmap"]["osdmap"], "num_osds")),
         };
         println!("Ceph event: {:?}", &ceph_event);
 
