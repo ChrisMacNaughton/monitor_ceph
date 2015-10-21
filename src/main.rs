@@ -9,8 +9,9 @@ use uuid::Uuid;
 extern crate simple_logger;
 extern crate influent;
 
-use rustc_serialize::json;
+use rustc_serialize::{json, Decoder, Decodable};
 use rustc_serialize::json::Json;
+
 use yaml_rust::YamlLoader;
 use std::fs::File;
 use std::io::prelude::*;
@@ -134,16 +135,16 @@ fn test_autodecode(){
     let decoded: TestCephHealth = json::decode(test_str).unwrap();
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct TestCephHealth  {
     election_epoch: u64,
     fsid: String,
-    health: Vec<Health>,
+    health: Health,
     quorum: Vec<u64>,
     quorum_names: Vec<String>,
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct Health{
     detail: Vec<String>,
     health: SubHealth,
@@ -152,25 +153,25 @@ struct Health{
     timechecks: Vec<TimeCheck>
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct SubHealth{
-    health_servies: HealthService,
+    health_services: Vec<HealthService>,
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct HealthService{
     mons: Vec<MonHealthDetails>
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct TimeCheck{
+    mons: Vec<MonHealth>,
     epoch: u64,
     round: u64,
     round_status: String,
-    mon_health: Vec<MonHealth>
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct MonHealthDetails{
     avail_percent: u64,
     health: String,
@@ -180,17 +181,18 @@ struct MonHealthDetails{
     last_updated: String,
     name: String,
     store_stats: MonStoreStat,
+}
+
+#[derive(RustcDecodable)]
+struct MonStoreStat{
+    bytes_log: u64,
     bytes_misc: u64,
     bytes_sst: u64,
     bytes_total: u64,
+    last_updated: String,
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
-struct MonStoreStat{
-    bytes_long: u64,
-}
-
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct MonHealth{
     health: String,
     latency: String,
@@ -198,7 +200,6 @@ struct MonHealth{
     skew: String,
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
 struct MdsMap{
     by_rank: Vec<String>,
     epoch: u64,
@@ -207,7 +208,23 @@ struct MdsMap{
     up: u64,
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+impl Decodable for MdsMap{
+    fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, D::Error>{
+        decoder.read_struct("root", 0, |decoder| {
+          decoder.read_struct_field("mdsmap", 0, |decoder| {
+             Ok(MdsMap{
+              by_rank: try!(decoder.read_struct_field("by_rank", 0, |decoder| Decodable::decode(decoder))),
+              epoch: try!(decoder.read_struct_field("epoch", 0, |decoder| Decodable::decode(decoder))),
+              in_map: try!(decoder.read_struct_field("in", 0, |decoder| Decodable::decode(decoder))),
+              max: try!(decoder.read_struct_field("max", 0, |decoder| Decodable::decode(decoder))),
+              up: try!(decoder.read_struct_field("up", 0, |decoder| Decodable::decode(decoder)))
+            })
+          })
+        })
+    }
+}
+
+#[derive(RustcDecodable)]
 struct MonMap{
     created: String,
     epoch: u64,
@@ -215,7 +232,8 @@ struct MonMap{
     modified: String,
     mons: Vec<Mon>
 }
-#[derive(RustcDecodable, RustcEncodable)]
+
+#[derive(RustcDecodable)]
 struct PgMap{
     bytes_avail: u64,
     bytes_total: u64,
@@ -226,7 +244,7 @@ struct PgMap{
     version: u64,
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct OsdMap{
     epoch: u64,
     full: bool,
@@ -236,13 +254,13 @@ struct OsdMap{
     num_up_osds: u64
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct PgState{
     count: u64,
     state_name: String,
 }
 
-#[derive(RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
 struct Mon{
     addr: String,
     name: String,
@@ -261,33 +279,36 @@ Object(
         "health": Object({
             "health_services":
                 Array([Object({
-                "mons": Array([Object({
-                    "avail_percent": U64(87),
-                    "health": String("HEALTH_OK"),
-                    "kb_avail": U64(829003484),
-                    "kb_total": U64(952772524),
-                    "kb_used": U64(75347972),
-                    "last_updated": String("2015-10-20 17:08:12.836783"),
-                    "name": String("chris-local-machine-3"),
-                    "store_stats": Object({"bytes_log": U64(257690),
-                    "bytes_misc": U64(936989),
-                    "bytes_sst": U64(0),
-                    "bytes_total": U64(1194679),
-                    "last_updated": String("0.000000")})}),
-                Object({"avail_percent": U64(87),
-                 "health": String("HEALTH_OK"), "kb_avail": U64(828993252), "kb_total": U64(952772524),
-                 "kb_used": U64(75358204), "last_updated": String("2015-10-20 17:08:06.998879"),
-                 "name": String("chris-local-machine-2"), "store_stats": Object({"bytes_log": U64(385439),
-                 "bytes_misc": U64(937120), "bytes_sst": U64(0), "bytes_total": U64(1322559),
-                "last_updated": String("0.000000")})}),
+                "mons": Array([
+                    Object({
+                        "avail_percent": U64(87),
+                        "health": String("HEALTH_OK"),
+                        "kb_avail": U64(829003484),
+                        "kb_total": U64(952772524),
+                        "kb_used": U64(75347972),
+                        "last_updated": String("2015-10-20 17:08:12.836783"),
+                        "name": String("chris-local-machine-3"),
+                        "store_stats": Object({"bytes_log": U64(257690),
+                        "bytes_misc": U64(936989),
+                        "bytes_sst": U64(0),
+                        "bytes_total": U64(1194679),
+                        "last_updated": String("0.000000")})}),
+                    Object({"avail_percent": U64(87),
+                         "health": String("HEALTH_OK"), "kb_avail": U64(828993252), "kb_total": U64(952772524),
+                         "kb_used": U64(75358204), "last_updated": String("2015-10-20 17:08:06.998879"),
+                         "name": String("chris-local-machine-2"), "store_stats": Object({"bytes_log": U64(385439),
+                         "bytes_misc": U64(937120), "bytes_sst": U64(0), "bytes_total": U64(1322559),
+                        "last_updated": String("0.000000")})}),
 
-            Object({"avail_percent": U64(87),
-                "health": String("HEALTH_OK"), "kb_avail": U64(828993252), "kb_total": U64(952772524),
-                "kb_used": U64(75358204), "last_updated": String("2015-10-20 17:08:06.998800"),
-                "name": String("chris-local-machine-4"), "store_stats": Object({"bytes_log": U64(385439),
-                "bytes_misc": U64(937120), "bytes_sst": U64(0), "bytes_total": U64(1322559),
-                "last_updated": String("0.000000")})})])}
-            )])}),
+                    Object({"avail_percent": U64(87),
+                        "health": String("HEALTH_OK"), "kb_avail": U64(828993252), "kb_total": U64(952772524),
+                        "kb_used": U64(75358204), "last_updated": String("2015-10-20 17:08:06.998800"),
+                        "name": String("chris-local-machine-4"), "store_stats": Object({"bytes_log": U64(385439),
+                        "bytes_misc": U64(937120), "bytes_sst": U64(0), "bytes_total": U64(1322559),
+                        "last_updated": String("0.000000")})})])}
+                    )]
+                )
+        }),
 
         "overall_status": String("HEALTH_OK"),
         "summary": Array([]),
