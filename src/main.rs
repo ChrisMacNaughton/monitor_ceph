@@ -133,9 +133,10 @@ struct CephHealth {
 fn test_autodecode(){
     let test_str = "{\"health\":{\"health\":{\"health_services\":[{\"mons\":[{\"name\":\"chris-local-machine-1\",\"kb_total\":232205304,\"kb_used\":81823684,\"kb_avail\":138563228,\"avail_percent\":59,\"last_updated\":\"2015-10-07 12:19:51.281273\",\"store_stats\":{\"bytes_total\":5408347,\"bytes_sst\":0,\"bytes_log\":4166001,\"bytes_misc\":1242346,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"},{\"name\":\"chris-local-machine-2\",\"kb_total\":232205304,\"kb_used\":79803236,\"kb_avail\":140583676,\"avail_percent\":60,\"last_updated\":\"2015-10-07 12:19:23.247120\",\"store_stats\":{\"bytes_total\":6844874,\"bytes_sst\":0,\"bytes_log\":5602535,\"bytes_misc\":1242339,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"},{\"name\":\"chris-local-machine-3\",\"kb_total\":232205304,\"kb_used\":78650196,\"kb_avail\":141736716,\"avail_percent\":61,\"last_updated\":\"2015-10-07 12:19:07.182466\",\"store_stats\":{\"bytes_total\":6531182,\"bytes_sst\":0,\"bytes_log\":5288894,\"bytes_misc\":1242288,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"}]}]},\"summary\":[],\"timechecks\":{\"epoch\":6,\"round\":38,\"round_status\":\"finished\",\"mons\":[{\"name\":\"chris-local-machine-1\",\"skew\":\"0.000000\",\"latency\":\"0.000000\",\"health\":\"HEALTH_OK\"},{\"name\":\"chris-local-machine-2\",\"skew\":\"0.000000\",\"latency\":\"0.000977\",\"health\":\"HEALTH_OK\"},{\"name\":\"chris-local-machine-3\",\"skew\":\"0.000000\",\"latency\":\"0.000818\",\"health\":\"HEALTH_OK\"}]},\"overall_status\":\"HEALTH_OK\",\"detail\":[]},\"fsid\":\"1bb15abc-4158-11e5-b499-00151737cf98\",\"election_epoch\":6,\"quorum\":[0,1,2],\"quorum_names\":[\"chris-local-machine-1\",\"chris-local-machine-2\",\"chris-local-machine-3\"],\"monmap\":{\"epoch\":2,\"fsid\":\"1bb15abc-4158-11e5-b499-00151737cf98\",\"modified\":\"2015-10-07 10:45:23.255204\",\"created\":\"0.000000\",\"mons\":[{\"rank\":0,\"name\":\"chris-local-machine-1\",\"addr\":\"10.0.2.22:6789/0\"},{\"rank\":1,\"name\":\"chris-local-machine-2\",\"addr\":\"10.0.2.78:6789/0\"},{\"rank\":2,\"name\":\"chris-local-machine-3\",\"addr\":\"10.0.2.141:6789/0\"}]},\"osdmap\":{\"osdmap\":{\"epoch\":9,\"num_osds\":3,\"num_up_osds\":3,\"num_in_osds\":3,\"full\":false,\"nearfull\":false}},\"pgmap\":{\"pgs_by_state\":[{\"state_name\":\"active+clean\",\"count\":192}],\"version\":487,\"num_pgs\":192,\"data_bytes\":4970896648,\"bytes_used\":252251439104,\"bytes_avail\":424777154560,\"bytes_total\":713334693888,\"write_bytes_sec\":26793300,\"op_per_sec\":8},\"mdsmap\":{\"epoch\":1,\"up\":0,\"in\":0,\"max\":1,\"by_rank\":[]}}";
     let decoded: TestCephHealth = json::decode(test_str).unwrap();
+    println!("Decoded: {:?}", decoded);
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct TestCephHealth  {
     election_epoch: u64,
     fsid: String,
@@ -144,34 +145,40 @@ struct TestCephHealth  {
     quorum_names: Vec<String>,
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct Health{
     detail: Vec<String>,
     health: SubHealth,
     overall_status: String,
-    summary: Vec<String>,
-    timechecks: Vec<TimeCheck>
+    summary: Vec<SummaryDetail>,
+    timechecks: TimeCheck
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
+struct SummaryDetail{
+     severity: String,
+     summary: String,
+}
+
+#[derive(Debug, RustcDecodable)]
 struct SubHealth{
     health_services: Vec<HealthService>,
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct HealthService{
     mons: Vec<MonHealthDetails>
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct TimeCheck{
-    mons: Vec<MonHealth>,
     epoch: u64,
+    mons: Vec<MonHealth>,
     round: u64,
     round_status: String,
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct MonHealthDetails{
     avail_percent: u64,
     health: String,
@@ -183,7 +190,7 @@ struct MonHealthDetails{
     store_stats: MonStoreStat,
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct MonStoreStat{
     bytes_log: u64,
     bytes_misc: u64,
@@ -192,7 +199,7 @@ struct MonStoreStat{
     last_updated: String,
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct MonHealth{
     health: String,
     latency: String,
@@ -224,7 +231,7 @@ impl Decodable for MdsMap{
     }
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct MonMap{
     created: String,
     epoch: u64,
@@ -233,7 +240,7 @@ struct MonMap{
     mons: Vec<Mon>
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct PgMap{
     bytes_avail: u64,
     bytes_total: u64,
@@ -244,7 +251,7 @@ struct PgMap{
     version: u64,
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct OsdMap{
     epoch: u64,
     full: bool,
@@ -254,96 +261,18 @@ struct OsdMap{
     num_up_osds: u64
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct PgState{
     count: u64,
     state_name: String,
 }
 
-#[derive(RustcDecodable)]
+#[derive(Debug, RustcDecodable)]
 struct Mon{
     addr: String,
     name: String,
     rank: u64,
 }
-
-/*
-Object(
-{
-"election_epoch": U64(6),
-"fsid": String("ecbb8960-0e21-11e2-b495-83a88f44db01"),
-"health":
-    Object(
-        {
-        "detail": Array([]),
-        "health": Object({
-            "health_services":
-                Array([Object({
-                "mons": Array([
-                    Object({
-                        "avail_percent": U64(87),
-                        "health": String("HEALTH_OK"),
-                        "kb_avail": U64(829003484),
-                        "kb_total": U64(952772524),
-                        "kb_used": U64(75347972),
-                        "last_updated": String("2015-10-20 17:08:12.836783"),
-                        "name": String("chris-local-machine-3"),
-                        "store_stats": Object({"bytes_log": U64(257690),
-                        "bytes_misc": U64(936989),
-                        "bytes_sst": U64(0),
-                        "bytes_total": U64(1194679),
-                        "last_updated": String("0.000000")})}),
-                    Object({"avail_percent": U64(87),
-                         "health": String("HEALTH_OK"), "kb_avail": U64(828993252), "kb_total": U64(952772524),
-                         "kb_used": U64(75358204), "last_updated": String("2015-10-20 17:08:06.998879"),
-                         "name": String("chris-local-machine-2"), "store_stats": Object({"bytes_log": U64(385439),
-                         "bytes_misc": U64(937120), "bytes_sst": U64(0), "bytes_total": U64(1322559),
-                        "last_updated": String("0.000000")})}),
-
-                    Object({"avail_percent": U64(87),
-                        "health": String("HEALTH_OK"), "kb_avail": U64(828993252), "kb_total": U64(952772524),
-                        "kb_used": U64(75358204), "last_updated": String("2015-10-20 17:08:06.998800"),
-                        "name": String("chris-local-machine-4"), "store_stats": Object({"bytes_log": U64(385439),
-                        "bytes_misc": U64(937120), "bytes_sst": U64(0), "bytes_total": U64(1322559),
-                        "last_updated": String("0.000000")})})])}
-                    )]
-                )
-        }),
-
-        "overall_status": String("HEALTH_OK"),
-        "summary": Array([]),
-        "timechecks": Object({"epoch": U64(6),
-            "mons": Array(
-                [Object({"health": String("HEALTH_OK"),
-                    "latency": String("0.000000"),
-                    "name": String("chris-local-machine-3"),
-                    "skew": String("0.000000")}),
-                Object({"health": String("HEALTH_OK"), "latency": String("0.000762"),
-                     "name": String("chris-local-machine-2"), "skew": String("0.000000")}),
-                Object({"health": String("HEALTH_OK"),
-                      "latency": String("0.000714"), "name": String("chris-local-machine-4"), "skew": String("0.000000")})]),
-            "round": U64(220),
-            "round_status": String("finished")})
-        }),
-    "mdsmap": Object({"by_rank": Array([]), "epoch": U64(1), "in": U64(0), "max": U64(1),
-               "up": U64(0)}),
-    "monmap": Object({"created": String("0.000000"), "epoch": U64(1), "fsid": String("ecbb8960-0e21-11e2-b495-83a88f44db01"),
-                "modified": String("0.000000"),
-            "mons": Array([Object({"addr": String("10.0.3.26:6789/0"), "name": String("chris-local-machine-3"),
-                 "rank": U64(0)}), Object({"addr": String("10.0.3.144:6789/0"), "name": String("chris-local-machine-2"), "rank": U64(1)}),
-                 Object({"addr": String("10.0.3.243:6789/0"), "name": String("chris-local-machine-4"), "rank": U64(2)})])}),
-    "osdmap": Object({"osdmap": Object({"epoch": U64(15), "full": Boolean(false), "nearfull": Boolean(false),
-                  "num_in_osds": U64(3), "num_osds": U64(3), "num_up_osds": U64(3)})}),
-    "pgmap": Object({"bytes_avail": U64(2546671624192),
-                  "bytes_total": U64(2926917193728), "bytes_used": U64(231496048640), "data_bytes": U64(0),
-                  "num_pgs": U64(192),
-                  "pgs_by_state": Array([Object({"count": U64(192), "state_name": String("active+clean")})]),
-                  "version": U64(618)}),
-    "quorum": Array([U64(0), U64(1), U64(2)]),
-    "quorum_names": Array([String("chris-local-machine-3"), String("chris-local-machine-2"),
-                  String("chris-local-machine-4")])})
- */
-
 
 fn get_time()->f64{
     let now = time::now();
