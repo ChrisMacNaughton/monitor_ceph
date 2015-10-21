@@ -2,12 +2,16 @@ extern crate rustc_serialize;
 use rustc_serialize::json::Json;
 extern crate time;
 extern crate ease;
+extern crate uuid;
 extern crate yaml_rust;
+
+use uuid::Uuid;
 use yaml_rust::YamlLoader;
 use std::fs::File;
 use std::io::prelude::*;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
+
 #[macro_use] extern crate log;
 extern crate simple_logger;
 use log::LogLevel;
@@ -85,6 +89,7 @@ fn get_config() -> Result<Args, String>{
 
 #[derive(Debug)]
 struct CephHealth {
+    fsid: Uuid,
     ops: f64,
     write_bytes_sec: f64,
     read_bytes_sec: f64,
@@ -93,17 +98,168 @@ struct CephHealth {
     bytes_avail: f64,
     bytes_total: f64
 }
+
+
+
+#[derive(RustcDecodable, RustcEncodable)]
+struct TestCephHealth  {
+    election_epoch: u64,
+    fsid: String,
+    health: Vec<Health>,
+    quorum: Vec<u64>,
+    quorum_names: Vec<String>,
+}
+
+struct Health{
+    detail: String,
+    health: blah,
+    overall_status: String,
+    summary: Vec<String>,
+    timechecks: Vec<TimeCheck>
+}
+
+struct TimeCheck{
+    epoch: u64,
+    round: u64,
+    round_status: String,
+    mon_health: Vec<MonHealth>
+}
+
+struct MonHealthDetails{
+    avail_percent: u64,
+    health: String,
+    kb_avail: u64,
+    kb_total: u64,
+    kb_used: u64,
+    last_updated: String,
+    name: String,
+    store_stats: MonStoreStat,
+    bytes_misc: u64,
+    bytes_sst: u64,
+    bytes_total: u64,
+    last_updated: String,
+
+}
+
+struct MonStoreStat{
+    bytes_long: u64,
+}
+
+struct MonHealth{
+    health: String,
+    latency: String,
+    name: String,
+    skew: String,
+}
+
+struct MdsMap{
+    by_rank: Vec,
+    epoch: u64,
+    in_map: u64,
+    max: u64,
+    up: u64,
+}
+
+struct MonMap{
+    created: String,
+    epoch: u64,
+    fsid: String,
+    modified: String,
+    mons: Vec<Mon>
+}
+
+struct Mon{
+    addr: String,
+    name: String,
+    rank: u64,
+}
+
+/*
+Object(
+{
+"election_epoch": U64(6),
+"fsid": String("ecbb8960-0e21-11e2-b495-83a88f44db01"),
+"health":
+    Object(
+        {
+        "detail": Array([]),
+        "health": Object({
+            "health_services":
+                Array([Object({
+                "mons": Array([Object({
+                    "avail_percent": U64(87),
+                    "health": String("HEALTH_OK"),
+                    "kb_avail": U64(829003484),
+                    "kb_total": U64(952772524),
+                    "kb_used": U64(75347972),
+                    "last_updated": String("2015-10-20 17:08:12.836783"),
+                    "name": String("chris-local-machine-3"),
+                    "store_stats": Object({"bytes_log": U64(257690),
+                    "bytes_misc": U64(936989),
+                    "bytes_sst": U64(0),
+                    "bytes_total": U64(1194679),
+                    "last_updated": String("0.000000")})}),
+                Object({"avail_percent": U64(87),
+                 "health": String("HEALTH_OK"), "kb_avail": U64(828993252), "kb_total": U64(952772524),
+                 "kb_used": U64(75358204), "last_updated": String("2015-10-20 17:08:06.998879"),
+                 "name": String("chris-local-machine-2"), "store_stats": Object({"bytes_log": U64(385439),
+                 "bytes_misc": U64(937120), "bytes_sst": U64(0), "bytes_total": U64(1322559),
+                "last_updated": String("0.000000")})}),
+
+            Object({"avail_percent": U64(87),
+            "health": String("HEALTH_OK"), "kb_avail": U64(828993252), "kb_total": U64(952772524),
+            "kb_used": U64(75358204), "last_updated": String("2015-10-20 17:08:06.998800"),
+            "name": String("chris-local-machine-4"), "store_stats": Object({"bytes_log": U64(385439),
+            "bytes_misc": U64(937120), "bytes_sst": U64(0), "bytes_total": U64(1322559),
+            "last_updated": String("0.000000")})})])})])}),
+
+        "overall_status": String("HEALTH_OK"),
+        "summary": Array([]),
+        "timechecks": Object({"epoch": U64(6),
+            "mons": Array(
+                [Object({"health": String("HEALTH_OK"),
+                    "latency": String("0.000000"),
+                    "name": String("chris-local-machine-3"),
+                    "skew": String("0.000000")}),
+                Object({"health": String("HEALTH_OK"), "latency": String("0.000762"),
+                     "name": String("chris-local-machine-2"), "skew": String("0.000000")}),
+                Object({"health": String("HEALTH_OK"),
+                      "latency": String("0.000714"), "name": String("chris-local-machine-4"), "skew": String("0.000000")})]),
+            "round": U64(220),
+            "round_status": String("finished")})
+        }),
+    "mdsmap": Object({"by_rank": Array([]), "epoch": U64(1), "in": U64(0), "max": U64(1),
+               "up": U64(0)}),
+
+    "monmap": Object({"created": String("0.000000"), "epoch": U64(1), "fsid": String("ecbb8960-0e21-11e2-b495-83a88f44db01"),
+                "modified": String("0.000000"),
+        "mons": Array([Object({"addr": String("10.0.3.26:6789/0"), "name": String("chris-local-machine-3"),
+                 "rank": U64(0)}), Object({"addr": String("10.0.3.144:6789/0"), "name": String("chris-local-machine-2"), "rank": U64(1)}),
+                 Object({"addr": String("10.0.3.243:6789/0"), "name": String("chris-local-machine-4"), "rank": U64(2)})])}),
+                 "osdmap": Object({"osdmap": Object({"epoch": U64(15), "full": Boolean(false), "nearfull": Boolean(false),
+                  "num_in_osds": U64(3), "num_osds": U64(3), "num_up_osds": U64(3)})}), "pgmap": Object({"bytes_avail": U64(2546671624192),
+                  "bytes_total": U64(2926917193728), "bytes_used": U64(231496048640), "data_bytes": U64(0), "num_pgs": U64(192),
+                  "pgs_by_state": Array([Object({"count": U64(192), "state_name": String("active+clean")})]), "version": U64(618)}),
+    "quorum": Array([U64(0), U64(1), U64(2)]),
+    "quorum_names": Array([String("chris-local-machine-3"), String("chris-local-machine-2"),
+                  String("chris-local-machine-4")])})
+
+ */
+
+
 fn get_time()->f64{
     let now = time::now();
     let milliseconds_since_epoch = now.to_timespec().sec * 1000;
     return milliseconds_since_epoch as f64;
 }
+
 // JSON value representation
 impl CephHealth{
     fn to_json(&self)->String{
 
-        format!("{{\"ops_per_sec\": \"{}\",\"write_bytes_sec\": \"{}\", \"read_bytes_sec\": \"{}\", \"data\":\"{}\", \
+        format!("{{\"fsid\":\"{}\",\"ops_per_sec\": \"{}\",\"write_bytes_sec\": \"{}\", \"read_bytes_sec\": \"{}\", \"data\":\"{}\", \
             \"bytes_used\":{}, \"bytes_avail\":{}, \"bytes_total\":\"{}\", \"postDate\": {}}}",
+            self.fsid.to_hyphenated_string(),
             self.ops,
             self.write_bytes_sec,
             self.read_bytes_sec,
@@ -169,6 +325,7 @@ fn i_hate_unwraps(json: &rustc_serialize::json::Json, key: &str) -> Result<rustc
 
 }
 
+
 fn log_to_es(args: &Args, ceph_event: &CephHealth) {
     if args.outputs.contains(&"elasticsearch".to_string()) && args.elasticsearch.is_some() {
         let url = args.elasticsearch.clone().unwrap();
@@ -223,9 +380,20 @@ fn main() {
         };
 
         let obj = Json::from_str(json.as_ref()).unwrap();
-        // println!("{:?}", obj);
+        println!("{:?}", obj);
+
+        let fsid = match obj.find("fsid"){
+            Some(fsid_json) => {
+                match fsid_json.as_string(){
+                    Some(fsid) => fsid,
+                    None => "",
+                }
+            },
+            None => "",
+        };
 
         let ceph_event = CephHealth {
+            fsid: Uuid::parse_str(fsid).unwrap(),
             ops: parse_f64(i_hate_unwraps(&obj["pgmap"], &"op_per_sec")),
             write_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "write_bytes_sec"))),
             read_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "read_bytes_sec"))),
@@ -234,6 +402,7 @@ fn main() {
             bytes_avail: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_avail"))),
             bytes_total: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_total"))),
         };
+        println!("Ceph event: {:?}", &ceph_event);
 
         log_to_es(&args, &ceph_event);
         log_to_stdout(&args, &ceph_event);
