@@ -1,30 +1,31 @@
-extern crate rustc_serialize;
-extern crate time;
 extern crate ease;
+#[macro_use] extern crate log;
+extern crate influent;
+extern crate rustc_serialize;
+extern crate simple_logger;
+extern crate time;
 extern crate uuid;
 extern crate yaml_rust;
 
-mod perf;
-mod health;
-
-use uuid::Uuid;
-#[macro_use] extern crate log;
-extern crate simple_logger;
-extern crate influent;
-
-use rustc_serialize::json::Json;
-
-use yaml_rust::YamlLoader;
+//std
 use std::fs::File;
 use std::io::prelude::*;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
 
+//modules
+mod perf;
+mod health;
+
+//crates
 use influent::create_client;
 use influent::client::Client;
 use influent::client::Credentials;
 use influent::measurement::{Measurement, Value};
 use log::LogLevel;
+use rustc_serialize::json::Json;
+use uuid::Uuid;
+use yaml_rust::YamlLoader;
 
 macro_rules! parse_opt (
     ($name:ident, $doc:expr) => (
@@ -119,78 +120,10 @@ fn get_config() -> Result<Args, String>{
     })
 }
 
-#[derive(Debug)]
-struct CephHealth {
-    fsid: Uuid,
-    ops: i64,
-    write_bytes_sec: f64,
-    read_bytes_sec: f64,
-    data: f64,
-    bytes_used: f64,
-    bytes_avail: f64,
-    bytes_total: f64,
-    num_osds: i64
-}
-
-
 fn get_time()->f64{
     let now = time::now();
     let milliseconds_since_epoch = now.to_timespec().sec * 1000;
     return milliseconds_since_epoch as f64;
-}
-
-// JSON value representation
-impl CephHealth{
-    fn to_json(&self)->String{
-
-        format!("{{\"fsid\":\"{}\",\"ops_per_sec\": \"{}\",\"write_bytes_sec\": \"{}\", \"read_bytes_sec\": \"{}\", \"data\":\"{}\", \
-            \"bytes_used\":{}, \"bytes_avail\":{}, \"bytes_total\":\"{}\", \"postDate\": {}}}",
-            self.fsid.to_hyphenated_string(),
-            self.ops,
-            self.write_bytes_sec,
-            self.read_bytes_sec,
-            self.data,
-            self.bytes_used,
-            self.bytes_avail,
-            self.bytes_total,
-            get_time())
-    }
-}
-
-fn to_kb(num: f64) -> f64 {
-    num / 1024.0
-}
-
-fn to_mb(num: f64) -> f64 {
-    to_kb(num) / 1024.0
-}
-
-fn to_gb(num: f64) -> f64 {
-    to_mb(num) / 1024.0
-}
-
-fn to_tb(num: f64) -> f64 {
-    to_gb(num) / 1024.0
-}
-
-fn parse_f64(num: Result<rustc_serialize::json::Json, f64>) -> f64 {
-    match num {
-        Ok(num) =>  match num.as_f64() {
-            Some(o) => o,
-            None => 0.0,
-        },
-        Err(e) => e
-    }
-}
-
-fn parse_i64(num: Result<rustc_serialize::json::Json, f64>) -> i64 {
-    match num {
-        Ok(num) =>  match num.as_i64() {
-            Some(o) => o,
-            None => 0,
-        },
-        Err(_) => 0
-    }
 }
 
 fn get_ceph_stats() -> Result<String, String> {
@@ -209,19 +142,8 @@ fn get_ceph_stats() -> Result<String, String> {
     Ok(output_string)
 }
 
-fn i_hate_unwraps(json: &rustc_serialize::json::Json, key: &str) -> Result<rustc_serialize::json::Json, f64> {
-
-    match json.find(key) {
-        Some(v) => {
-            Ok(v.clone())
-        },
-        None => Err(0.0),
-    }
-
-}
-
-
-fn log_to_es(args: &Args, ceph_event: &CephHealth) {
+/*
+fn log_to_es(args: &Args, ceph_event: &health::CephHealth) {
     if args.outputs.contains(&"elasticsearch".to_string()) && args.elasticsearch.is_some() {
         let url = args.elasticsearch.clone().unwrap();
         let url = url.as_ref();
@@ -250,11 +172,12 @@ fn log_to_es(args: &Args, ceph_event: &CephHealth) {
 
 }
 
-fn log_to_stdout(args: &Args, ceph_event: &CephHealth) {
+fn log_to_stdout(args: &Args, ceph_event: &health::CephHealth) {
     if args.outputs.contains(&"stdout".to_string()){
         println!("{:?}", ceph_event);
     }
 }
+*/
 
 // struct CephHealth {
 //     ops: f64,
@@ -265,7 +188,8 @@ fn log_to_stdout(args: &Args, ceph_event: &CephHealth) {
 //     bytes_avail: f64,
 //     bytes_total: f64
 // }
-fn log_to_influx(args: &Args, ceph_event: &CephHealth) {
+/*
+fn log_to_influx(args: &Args, ceph_event: &health::CephHealth) {
     if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
         let influx = &args.influx.clone().unwrap();
         let credentials = Credentials {
@@ -291,6 +215,7 @@ fn log_to_influx(args: &Args, ceph_event: &CephHealth) {
         debug!("{:?}", res);
     }
 }
+*/
 
 fn main() {
     //TODO make configurable via cli or config arg
@@ -310,35 +235,17 @@ fn main() {
             Err(_) => "{}".to_string(),
         };
 
-        let obj = Json::from_str(json.as_ref()).unwrap();
-        println!("{:?}", obj);
-
-        let fsid = match obj.find("fsid"){
-            Some(fsid_json) => {
-                match fsid_json.as_string(){
-                    Some(fsid) => fsid,
-                    None => "",
-                }
+        let ceph_event = match health::CephHealth::decode(&json){
+            Ok(json) => json,
+            Err(error) => {
+                //Log me
+                continue;
             },
-            None => "",
         };
 
-        let ceph_event = CephHealth {
-            fsid: Uuid::parse_str(fsid).unwrap(),
-            ops: parse_i64(i_hate_unwraps(&obj["pgmap"], &"op_per_sec")),
-            write_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "write_bytes_sec"))),
-            read_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "read_bytes_sec"))),
-            data: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "data_bytes"))),
-            bytes_used: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_used"))),
-            bytes_avail: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_avail"))),
-            bytes_total: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_total"))),
-            num_osds: parse_i64(i_hate_unwraps(&obj["osdmap"]["osdmap"], "num_osds")),
-        };
-        println!("Ceph event: {:?}", &ceph_event);
-
-        log_to_es(&args, &ceph_event);
-        log_to_stdout(&args, &ceph_event);
-        log_to_influx(&args, &ceph_event);
+        //log_to_es(&args, &ceph_event);
+        //log_to_stdout(&args, &ceph_event);
+        //log_to_influx(&args, &ceph_event);
     }
 
 }
