@@ -15,8 +15,9 @@ extern crate influent;
 use rustc_serialize::json::Json;
 
 use yaml_rust::YamlLoader;
-use std::fs::File;
+use std::fs::{self, DirEntry, File};
 use std::io::prelude::*;
+use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
 
@@ -292,11 +293,58 @@ fn log_to_influx(args: &Args, ceph_event: &CephHealth) {
     }
 }
 
+fn has_child_directory(dir: &Path) -> Result<bool,std::io::Error> {
+    if try!(fs::metadata(dir)).is_dir() {
+        for entry in try!(fs::read_dir(dir)) {
+            let entry = try!(entry);
+            if try!(fs::metadata(entry.path())).is_dir() {
+                return Ok(true);
+            }
+        }
+    }
+    return Ok(false);
+}
+
+// Look for /var/lib/ceph/mon/ceph-ip-172-31-24-128
+fn is_monitor()->Result<bool, std::io::Error>{
+    //does it have a mon directory entry?
+    return has_child_directory(Path::new("/var/lib/ceph/mon"));
+}
+
+// Look for: /var/lib/ceph/osd/ceph-3/active
+fn is_osd()->Result<bool, std::io::Error>{
+    //Lets check if the OSD is active
+    for entry in try!(fs::read_dir(Path::new("/var/lib/ceph/osd"))){
+        //Usually only one entry in here
+        let entry = try!(entry);
+        if try!(fs::metadata(entry.path())).is_dir(){
+            //descend and try to open the active file to check the OSD status
+            let mut file_path = entry.path();
+            file_path.push("active");
+
+            let mut f = try!(File::open(file_path));
+            let mut contents: String = String::new();
+            try!(f.read_to_string(&mut contents));
+
+            //Check if the OSD is active
+            if contents.trim() == "ok"{
+                return Ok(true);
+            }
+        }
+    }
+    return Ok(false);
+}
+
 fn main() {
     //TODO make configurable via cli or config arg
     simple_logger::init_with_level(LogLevel::Info).unwrap();
 
     let periodic = timer_periodic(1000);
+
+    let is_monitor = match is_monitor(){
+        Ok(result) => result,
+        Err(error) => false,
+    };
 
     let args = match get_config() {
         Ok(a) => a,
@@ -305,42 +353,45 @@ fn main() {
     debug!("{:?}", args);
     loop{
         let _ = periodic.recv();
-        let json = match get_ceph_stats(){
-            Ok(json) => json,
-            Err(_) => "{}".to_string(),
-        };
 
-        let obj = Json::from_str(json.as_ref()).unwrap();
-        println!("{:?}", obj);
+        //Only grab stats from the ceph monitor
+        if is_monitor{
+            let json = match get_ceph_stats(){
+                Ok(json) => json,
+                Err(_) => "{}".to_string(),
+            };
 
-        let fsid = match obj.find("fsid"){
-            Some(fsid_json) => {
-                match fsid_json.as_string(){
-                    Some(fsid) => fsid,
-                    None => "",
-                }
-            },
-            None => "",
-        };
+            let obj = Json::from_str(json.as_ref()).unwrap();
+            println!("{:?}", obj);
 
-        let ceph_event = CephHealth {
-            fsid: Uuid::parse_str(fsid).unwrap(),
-            ops: parse_i64(i_hate_unwraps(&obj["pgmap"], &"op_per_sec")),
-            write_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "write_bytes_sec"))),
-            read_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "read_bytes_sec"))),
-            data: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "data_bytes"))),
-            bytes_used: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_used"))),
-            bytes_avail: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_avail"))),
-            bytes_total: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_total"))),
-            num_osds: parse_i64(i_hate_unwraps(&obj["osdmap"]["osdmap"], "num_osds")),
-        };
-        println!("Ceph event: {:?}", &ceph_event);
+            let fsid = match obj.find("fsid"){
+                Some(fsid_json) => {
+                    match fsid_json.as_string(){
+                        Some(fsid) => fsid,
+                        None => "",
+                    }
+                },
+                None => "",
+            };
 
-        log_to_es(&args, &ceph_event);
-        log_to_stdout(&args, &ceph_event);
-        log_to_influx(&args, &ceph_event);
+            let ceph_event = CephHealth {
+                fsid: Uuid::parse_str(fsid).unwrap(),
+                ops: parse_i64(i_hate_unwraps(&obj["pgmap"], &"op_per_sec")),
+                write_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "write_bytes_sec"))),
+                read_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "read_bytes_sec"))),
+                data: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "data_bytes"))),
+                bytes_used: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_used"))),
+                bytes_avail: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_avail"))),
+                bytes_total: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_total"))),
+                num_osds: parse_i64(i_hate_unwraps(&obj["osdmap"]["osdmap"], "num_osds")),
+            };
+            println!("Ceph event: {:?}", &ceph_event);
+
+            log_to_es(&args, &ceph_event);
+            log_to_stdout(&args, &ceph_event);
+            log_to_influx(&args, &ceph_event);
+        }
     }
-
 }
 
 fn timer_periodic(ms: u32) -> Receiver<()> {
