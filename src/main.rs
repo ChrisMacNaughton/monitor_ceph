@@ -2,15 +2,17 @@
 extern crate log;
 extern crate influent;
 extern crate output_args;
+extern crate regex;
 extern crate rustc_serialize;
 extern crate simple_logger;
 extern crate time;
 
 // std
+use std::str::FromStr;
 use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
-use std::fs::{self, File};
+use std::fs::{self};
 use std::io::prelude::*;
 
 // modules
@@ -18,12 +20,9 @@ mod perf;
 mod health;
 
 // crates
-use influent::create_client;
-use influent::client::Client;
-use influent::client::Credentials;
-use influent::measurement::{Measurement, Value};
 use log::LogLevel;
 use output_args::*;
+use regex::Regex;
 
 fn get_config() -> output_args::Args {
     output_args::get_args()
@@ -45,7 +44,20 @@ fn get_ceph_stats() -> Result<String, String> {
     Ok(output_string)
 }
 
-
+fn get_osd_perf(osd_num: u32) -> Result<String, String> {
+    let output = Command::new("/usr/bin/ceph")
+                         .arg("daemon")
+                         .arg(format!("osd-{}", osd_num))
+                         .arg("perf")
+                         .arg("dump")
+                         .output()
+                         .unwrap_or_else(|e| panic!("failed to execute ceph process: {}", e));
+    let output_string = match String::from_utf8(output.stdout) {
+        Ok(v) => v,
+        Err(_) => "{}".to_string(),
+    };
+    Ok(output_string)
+}
 
 fn has_child_directory(dir: &Path) -> Result<bool, std::io::Error> {
     if try!(fs::metadata(dir)).is_dir() {
@@ -60,33 +72,50 @@ fn has_child_directory(dir: &Path) -> Result<bool, std::io::Error> {
 }
 
 // Look for /var/lib/ceph/mon/ceph-ip-172-31-24-128
-fn is_monitor() -> Result<bool, std::io::Error> {
+fn is_monitor() -> bool {
     // does it have a mon directory entry?
-    return has_child_directory(Path::new("/var/lib/ceph/mon"));
+    match has_child_directory(Path::new("/var/lib/ceph/mon")){
+        Ok(result) => result,
+        Err(_) => false,
+    }
 }
 
-// Look for: /var/lib/ceph/osd/ceph-3/active
-fn is_osd() -> Result<bool, std::io::Error> {
-    // Lets check if the OSD is active
-    for entry in try!(fs::read_dir(Path::new("/var/lib/ceph/osd"))) {
-        // Usually only one entry in here
+//NOTE: This skips a lot of failure cases
+// Check for osd sockets and give back a vec of osd numbers that are active
+fn get_osds() -> Result<Vec<u32>, std::io::Error> {
+    let mut osds: Vec<u32> = Vec::new();
+
+    let osd_regex = Regex::new(r"ceph-osd.(?P<number>\d+).asok").unwrap();
+
+    for entry in try!(fs::read_dir(Path::new("/var/run/ceph"))){
+        //parse the unix socket names such as:
+        //ceph-mon.ip-172-31-22-89.asok
+        //ceph-osd.1.asok
+
         let entry = try!(entry);
-        if try!(fs::metadata(entry.path())).is_dir() {
-            // descend and try to open the active file to check the OSD status
-            let mut file_path = entry.path();
-            file_path.push("active");
-
-            let mut f = try!(File::open(file_path));
-            let mut contents: String = String::new();
-            try!(f.read_to_string(&mut contents));
-
-            // Check if the OSD is active
-            if contents.trim() == "ok" {
-                return Ok(true);
+        let sock_addr_osstr = entry.file_name();
+        let file_name = match sock_addr_osstr.to_str(){
+            Some(name) => name,
+            None => {
+                //Skip files we can't turn into a string
+                continue;
             }
+        };
+
+        //Ignore failures
+        match osd_regex.captures(file_name){
+            Some(osd) => {
+                if let Some(osd_number) = osd.name("number"){
+                    let num = u32::from_str(osd_number).unwrap();
+                    osds.push(num);
+                }
+                //Ignore failures
+            }
+            //Ignore non matches, ie: ceph monitors
+            None => {},
         }
     }
-    return Ok(false);
+    return Ok(osds);
 }
 
 fn main() {
@@ -95,9 +124,15 @@ fn main() {
 
     let periodic = timer_periodic(1000);
 
-    let is_monitor = match is_monitor() {
-        Ok(result) => result,
-        Err(_) => false,
+    let is_monitor = is_monitor();
+
+    let osd_list = match get_osds(){
+        Ok(json) => json,
+        Err(error) => {
+            warn!("Error getting osd list {:?}", error);
+            //TODO: What should we do here?
+            return;
+        }
     };
 
     let args = get_config();
@@ -105,7 +140,7 @@ fn main() {
     loop {
         let _ = periodic.recv();
 
-        // Only grab stats from the ceph monitor
+        // Grab stats from the ceph monitor
         if is_monitor {
             let _ = periodic.recv();
             let json = match get_ceph_stats() {
@@ -114,6 +149,23 @@ fn main() {
             };
 
             let ceph_event = match health::CephHealth::decode(&json) {
+                Ok(json) => json,
+                Err(error) => {
+                    warn!("There was an error: {:?}", error);
+                    continue;
+                }
+            };
+            ceph_event.log(&args);
+        }
+
+        //Now the osds
+        for osd_num in osd_list.iter(){
+            let json = match get_osd_perf(*osd_num){
+                Ok(json) => json,
+                Err(_) => "{}".to_string(),
+            };
+
+            let ceph_event = match perf::OsdPerf::decode(&json) {
                 Ok(json) => json,
                 Err(error) => {
                     warn!("There was an error: {:?}", error);
