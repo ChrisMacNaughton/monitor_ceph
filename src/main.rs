@@ -230,6 +230,27 @@ fn log_to_influx(args: &Args, ceph_event: &health::CephHealth) {
     }
 }
 
+fn log_packet_to_carbon(carbon_url: &str, carbon_data: String) -> Result<(), String> {
+    let mut stream = try!(TcpStream::connect(carbon_url).map_err(|e| e.to_string()));
+    let bytes_written = try!(stream.write(&carbon_data.into_bytes()[..])
+                                   .map_err(|e| e.to_string()));
+    info!("Wrote: {} bytes to graphite", &bytes_written);
+    Ok(())
+}
+
+fn log_to_carbon(args: &Args, ceph_event: &health::CephHealth) {
+    if args.outputs.contains(&"carbon".to_string()) && args.carbon.is_some() {
+        let carbon = &args.carbon.clone().unwrap();
+        let carbon_data = ceph_event.to_carbon_string(&carbon.root_key);
+
+        let carbon_host = &carbon.host;
+        let carbon_port = &carbon.port;
+        let carbon_url = format!("{}:{}", carbon_host, carbon_port);
+        // println!("{}", carbon_data)
+        let _ = log_packet_to_carbon(carbon_url.as_ref(), carbon_data);
+    }
+}
+
 fn has_child_directory(dir: &Path) -> Result<bool, std::io::Error> {
     if try!(fs::metadata(dir)).is_dir() {
         for entry in try!(fs::read_dir(dir)) {
@@ -270,27 +291,6 @@ fn is_osd() -> Result<bool, std::io::Error> {
         }
     }
     return Ok(false);
-}
-
-fn log_packet_to_carbon(carbon_url: &str, carbon_data: String) -> Result<(), String> {
-    let mut stream = try!(TcpStream::connect(carbon_url).map_err(|e| e.to_string()));
-    let bytes_written = try!(stream.write(&carbon_data.into_bytes()[..])
-                                   .map_err(|e| e.to_string()));
-    info!("Wrote: {} bytes to graphite", &bytes_written);
-    Ok(())
-}
-
-fn log_to_carbon(args: &Args, ceph_event: &health::CephHealth) {
-    if args.outputs.contains(&"carbon".to_string()) && args.carbon.is_some() {
-        let carbon = &args.carbon.clone().unwrap();
-        let carbon_data = ceph_event.to_carbon_string(&carbon.root_key);
-
-        let carbon_host = &carbon.host;
-        let carbon_port = &carbon.port;
-        let carbon_url = format!("{}:{}", carbon_host, carbon_port);
-        // println!("{}", carbon_data)
-        let _ = log_packet_to_carbon(carbon_url.as_ref(), carbon_data);
-    }
 }
 
 fn main() {

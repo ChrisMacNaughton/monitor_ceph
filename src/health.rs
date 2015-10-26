@@ -102,7 +102,7 @@ impl CephHealth{
                 "total",
                 self.pgmap.bytes_total,
                 root_key = root_key.clone(),
-                timestamp = get_time())
+                timestamp = get_time() / 1000.0)
     }
 }
 
