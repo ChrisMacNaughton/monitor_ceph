@@ -61,6 +61,32 @@ impl CephHealth{
             self.pgmap.bytes_total,
             get_time())
     }
+
+    pub fn to_carbon_string(&self, root_key: &String) -> String {
+        let ops_per_sec = match self.pgmap.op_per_sec{
+            Some(ops) => ops,
+            None => 0,
+        };
+        let write_bytes_sec = match self.pgmap.write_bytes_sec{
+            Some(write_bytes_sec) => write_bytes_sec,
+            None => 0,
+        };
+        let read_bytes_sec = match self.pgmap.read_bytes_sec{
+            Some(read_bytes_sec) => read_bytes_sec,
+            None => 0,
+        };
+        format!( r#"{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+"#, "osds", self.osdmap.osdmap.num_osds, "ops", ops_per_sec, "write_bytes", write_bytes_sec,
+"read_bytes", read_bytes_sec, "data", self.pgmap.data_bytes, "used", self.pgmap.bytes_used,
+"avail", self.pgmap.bytes_avail, "total", self.pgmap.bytes_total, root_key = root_key.clone(), timestamp = get_time())
+    }
 }
 
 #[derive(Debug, RustcDecodable)]
@@ -174,7 +200,7 @@ pub struct PgMap{
 
 #[derive(Debug, RustcDecodable)]
 pub struct OsdMap{
-    osdmap: SubOsdMap,
+    pub osdmap: SubOsdMap,
 }
 
 #[derive(Debug, RustcDecodable)]
