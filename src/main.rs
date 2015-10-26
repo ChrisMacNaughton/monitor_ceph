@@ -7,12 +7,11 @@ extern crate simple_logger;
 extern crate time;
 
 // std
-use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
-use std::net::TcpStream;
 use std::fs::{self, File};
+use std::io::prelude::*;
 
 // modules
 mod perf;
@@ -46,63 +45,7 @@ fn get_ceph_stats() -> Result<String, String> {
     Ok(output_string)
 }
 
-fn log_to_stdout(args: &Args, ceph_event: &health::CephHealth) {
-    if args.outputs.contains(&"stdout".to_string()) {
-        println!("{:?}", ceph_event);
-    }
-}
 
-fn log_to_influx(args: &Args, ceph_event: &health::CephHealth) {
-    if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
-        let influx = &args.influx.clone().unwrap();
-        let credentials = Credentials {
-            username: influx.user.as_ref(),
-            password: influx.password.as_ref(),
-            database: "ceph",
-        };
-        let host = format!("http://{}:{}", influx.host, influx.port);
-        let hosts = vec![host.as_ref()];
-        let client = create_client(credentials, hosts);
-
-        let mut measurement = Measurement::new("monitor");
-        measurement.add_field("ops",
-                              Value::Integer(ceph_event.pgmap.op_per_sec.unwrap_or(0) as i64));
-        measurement.add_field("writes",
-                              Value::Integer(ceph_event.pgmap.write_bytes_sec.unwrap_or(0) as i64));
-        measurement.add_field("reads",
-                              Value::Integer(ceph_event.pgmap.read_bytes_sec.unwrap_or(0) as i64));
-        measurement.add_field("data", Value::Integer(ceph_event.pgmap.data_bytes as i64));
-        measurement.add_field("used", Value::Integer(ceph_event.pgmap.bytes_used as i64));
-        measurement.add_field("avail", Value::Integer(ceph_event.pgmap.bytes_avail as i64));
-        measurement.add_field("total", Value::Integer(ceph_event.pgmap.bytes_total as i64));
-        measurement.add_field("osds",
-                              Value::Integer(ceph_event.osdmap.osdmap.num_osds as i64));
-        let res = client.write_one(measurement, None);
-
-        debug!("{:?}", res);
-    }
-}
-
-fn log_packet_to_carbon(carbon_url: &str, carbon_data: String) -> Result<(), String> {
-    let mut stream = try!(TcpStream::connect(carbon_url).map_err(|e| e.to_string()));
-    let bytes_written = try!(stream.write(&carbon_data.into_bytes()[..])
-                                   .map_err(|e| e.to_string()));
-    info!("Wrote: {} bytes to graphite", &bytes_written);
-    Ok(())
-}
-
-fn log_to_carbon(args: &Args, ceph_event: &health::CephHealth) {
-    if args.outputs.contains(&"carbon".to_string()) && args.carbon.is_some() {
-        let carbon = &args.carbon.clone().unwrap();
-        let carbon_data = ceph_event.to_carbon_string(&carbon.root_key);
-
-        let carbon_host = &carbon.host;
-        let carbon_port = &carbon.port;
-        let carbon_url = format!("{}:{}", carbon_host, carbon_port);
-        // println!("{}", carbon_data)
-        let _ = log_packet_to_carbon(carbon_url.as_ref(), carbon_data);
-    }
-}
 
 fn has_child_directory(dir: &Path) -> Result<bool, std::io::Error> {
     if try!(fs::metadata(dir)).is_dir() {
@@ -177,10 +120,7 @@ fn main() {
                     continue;
                 }
             };
-
-            log_to_stdout(&args, &ceph_event);
-            log_to_influx(&args, &ceph_event);
-            log_to_carbon(&args, &ceph_event);
+            ceph_event.log(&args);
         }
     }
 }
