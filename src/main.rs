@@ -4,17 +4,12 @@ extern crate influent;
 extern crate rustc_serialize;
 extern crate simple_logger;
 extern crate time;
-extern crate uuid;
 extern crate yaml_rust;
 
-use uuid::Uuid;
-use rustc_serialize::json::Json;
-
 use yaml_rust::YamlLoader;
-use std::fs::{self, DirEntry, File};
+use std::fs::{self, File};
 
 //std
-use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
@@ -31,7 +26,6 @@ use influent::client::Client;
 use influent::client::Credentials;
 use influent::measurement::{Measurement, Value};
 use log::LogLevel;
-use yaml_rust::YamlLoader;
 
 macro_rules! parse_opt (
     ($name:ident, $doc:expr) => (
@@ -298,7 +292,7 @@ fn main() {
 
     let is_monitor = match is_monitor(){
         Ok(result) => result,
-        Err(error) => false,
+        Err(_) => false,
     };
 
     let args = match get_config() {
@@ -311,40 +305,24 @@ fn main() {
 
         //Only grab stats from the ceph monitor
         if is_monitor{
+            let _ = periodic.recv();
             let json = match get_ceph_stats(){
                 Ok(json) => json,
                 Err(_) => "{}".to_string(),
             };
 
-            let obj = Json::from_str(json.as_ref()).unwrap();
-            println!("{:?}", obj);
-
-            let fsid = match obj.find("fsid"){
-                Some(fsid_json) => {
-                    match fsid_json.as_string(){
-                        Some(fsid) => fsid,
-                        None => "",
-                    }
+            let ceph_event = match health::CephHealth::decode(&json){
+                Ok(json) => json,
+                Err(error) => {
+                    warn!("There was an error: {:?}", error);
+                    continue;
                 },
-                None => "",
             };
-
-            let ceph_event = CephHealth {
-                fsid: Uuid::parse_str(fsid).unwrap(),
-                ops: parse_i64(i_hate_unwraps(&obj["pgmap"], &"op_per_sec")),
-                write_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "write_bytes_sec"))),
-                read_bytes_sec: to_mb(parse_f64(i_hate_unwraps(&obj["pgmap"], "read_bytes_sec"))),
-                data: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "data_bytes"))),
-                bytes_used: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_used"))),
-                bytes_avail: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_avail"))),
-                bytes_total: to_tb(parse_f64(i_hate_unwraps(&obj["pgmap"], "bytes_total"))),
-                num_osds: parse_i64(i_hate_unwraps(&obj["osdmap"]["osdmap"], "num_osds")),
-            };
-            println!("Ceph event: {:?}", &ceph_event);
 
             log_to_es(&args, &ceph_event);
             log_to_stdout(&args, &ceph_event);
             log_to_influx(&args, &ceph_event);
+            log_to_carbon(&args, &ceph_event);
         }
     }
 }
