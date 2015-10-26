@@ -52,15 +52,15 @@ impl CephHealth{
         format!("{{\"fsid\":\"{}\",\"ops_per_sec\": \"{}\",\"write_bytes_sec\": \"{}\",
             \"read_bytes_sec\": \"{}\", \"data\":\"{}\", \
             \"bytes_used\":{}, \"bytes_avail\":{}, \"bytes_total\":\"{}\", \"postDate\": {}}}",
-            self.fsid.to_hyphenated_string(),
-            ops_per_sec,
-            write_bytes_sec,
-            read_bytes_sec,
-            self.pgmap.data_bytes,
-            self.pgmap.bytes_used,
-            self.pgmap.bytes_avail,
-            self.pgmap.bytes_total,
-            get_time())
+                self.fsid.to_hyphenated_string(),
+                ops_per_sec,
+                write_bytes_sec,
+                read_bytes_sec,
+                self.pgmap.data_bytes,
+                self.pgmap.bytes_used,
+                self.pgmap.bytes_avail,
+                self.pgmap.bytes_total,
+                get_time())
     }
 
     pub fn to_carbon_string(&self, root_key: &String) -> String {
