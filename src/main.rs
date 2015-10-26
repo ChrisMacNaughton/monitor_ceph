@@ -1,8 +1,6 @@
 extern crate ease;
 #[macro_use] extern crate log;
 extern crate influent;
-use std::net::TcpStream;
-// use yaml_rust::YamlLoader;
 extern crate rustc_serialize;
 extern crate simple_logger;
 extern crate time;
@@ -14,6 +12,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
+use std::net::TcpStream;
 
 //modules
 mod perf;
@@ -44,6 +43,7 @@ struct Args {
     influx: Option<Influx>,
     outputs: Vec<String>,
 }
+
 #[derive(Clone,Debug)]
 struct Influx {
     user: String,
@@ -51,6 +51,7 @@ struct Influx {
     host: String,
     port: String
 }
+
 #[derive(Clone,Debug)]
 struct Carbon {
     host: String,
@@ -244,7 +245,7 @@ fn log_to_carbon(args: &Args, ceph_event: &health::CephHealth){
 
 fn main() {
     //TODO make configurable via cli or config arg
-    simple_logger::init_with_level(LogLevel::Debug).unwrap();
+    simple_logger::init_with_level(LogLevel::Info).unwrap();
 
     let periodic = timer_periodic(1000);
 
