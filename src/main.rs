@@ -2,13 +2,10 @@ extern crate ease;
 #[macro_use]
 extern crate log;
 extern crate influent;
+extern crate output_args;
 extern crate rustc_serialize;
 extern crate simple_logger;
 extern crate time;
-extern crate yaml_rust;
-
-use yaml_rust::YamlLoader;
-use std::fs::{self, File};
 
 // std
 use std::io::prelude::*;
@@ -16,6 +13,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
 use std::net::TcpStream;
+use std::fs::{self, File};
 
 // modules
 mod perf;
@@ -27,127 +25,10 @@ use influent::client::Client;
 use influent::client::Credentials;
 use influent::measurement::{Measurement, Value};
 use log::LogLevel;
+use output_args::*;
 
-macro_rules! parse_opt (
-    ($name:ident, $doc:expr) => (
-    let $name: Option<String> = match $doc.as_str() {
-        Some(o) => Some(o.to_string()),
-        None => None
-    }
-    );
-);
-
-#[derive(Clone,Debug)]
-struct Args {
-    carbon: Option<Carbon>,
-    elasticsearch: Option<String>,
-    stdout: Option<String>,
-    influx: Option<Influx>,
-    outputs: Vec<String>,
-}
-
-#[derive(Clone,Debug)]
-struct Influx {
-    user: String,
-    password: String,
-    host: String,
-    port: String,
-}
-
-#[derive(Clone,Debug)]
-struct Carbon {
-    host: String,
-    port: String,
-    root_key: String,
-}
-
-impl Args {
-    fn clean() -> Args {
-        Args {
-            carbon: None,
-            elasticsearch: None,
-            stdout: None,
-            influx: None,
-            outputs: Vec::new(),
-        }
-    }
-}
-
-fn get_config() -> Result<Args, String> {
-    let mut f = try!(File::open("/etc/default/decode_ceph.yaml").map_err(|e| e.to_string()));
-
-    let mut s = String::new();
-    try!(f.read_to_string(&mut s).map_err(|e| e.to_string()));
-
-    // Remove this hack when the new version of yaml_rust releases to get the real
-    // error msg
-    let docs = match YamlLoader::load_from_str(&s) {
-        Ok(data) => data,
-        Err(_) => {
-            error!("Unable to load yaml data from config file");
-            return Err("cannot load data from yaml".to_string());
-        }
-    };
-
-    let doc = &docs[0];
-
-    let elasticsearch = match doc["elasticsearch"].as_str() {
-        Some(o) => Some(format!("http://{}/ceph/operations", o)),
-        None => None,
-    };
-    parse_opt!(stdout, doc["stdout"]);
-    let influx_doc = doc["influx"].clone();
-    let influx_host = influx_doc["host"].as_str().unwrap_or("127.0.0.1");
-    let influx_port = influx_doc["port"].as_str().unwrap_or("8086");
-    let influx_password = influx_doc["password"].as_str().unwrap_or("root");
-    let influx_user = influx_doc["user"].as_str().unwrap_or("root");
-    let influx = Influx {
-        host: influx_host.to_string(),
-        port: influx_port.to_string(),
-        password: influx_password.to_string(),
-        user: influx_user.to_string(),
-    };
-
-    let carbon_doc = doc["carbon"].clone();
-
-    let carbon_host = match carbon_doc["host"].as_str() {
-        Some(h) => Some(h),
-        None => None,
-    };
-
-    let carbon_port = carbon_doc["port"].as_str().unwrap_or("2003");
-    let root_key = carbon_doc["root_key"].as_str().unwrap_or("ceph");
-
-    let carbon = match carbon_host {
-        Some(h) => Some(Carbon {
-            host: h.to_string(),
-            port: carbon_port.to_string(),
-            root_key: root_key.to_string(),
-        }),
-        None => None,
-    };
-
-    let outputs: Vec<String> = match doc["outputs"].as_vec() {
-        Some(o) => {
-            o.iter()
-             .map(|x| {
-                 match x.as_str() {
-                     Some(o) => o.to_string(),
-                     None => "".to_string(),
-                 }
-             })
-             .collect()
-        }
-        None => Vec::new(),
-    };
-
-    Ok(Args {
-        carbon: carbon,
-        elasticsearch: elasticsearch,
-        stdout: stdout,
-        influx: Some(influx),
-        outputs: outputs,
-    })
+fn get_config() -> output_args::Args {
+    output_args::get_args()
 }
 
 fn get_ceph_stats() -> Result<String, String> {
@@ -304,10 +185,7 @@ fn main() {
         Err(_) => false,
     };
 
-    let args = match get_config() {
-        Ok(a) => a,
-        Err(_) => Args::clean(),
-    };
+    let args = get_config();
     debug!("{:?}", args);
     loop {
         let _ = periodic.recv();
