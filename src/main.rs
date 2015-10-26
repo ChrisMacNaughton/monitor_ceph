@@ -1,4 +1,3 @@
-extern crate ease;
 #[macro_use]
 extern crate log;
 extern crate influent;
@@ -45,33 +44,6 @@ fn get_ceph_stats() -> Result<String, String> {
         Err(_) => "{}".to_string(),
     };
     Ok(output_string)
-}
-
-fn log_to_es(args: &Args, ceph_event: &health::CephHealth) {
-    if args.outputs.contains(&"elasticsearch".to_string()) && args.elasticsearch.is_some() {
-        let url = args.elasticsearch.clone().unwrap();
-        let url = url.as_ref();
-        debug!("Logging to {}", url);
-        let parsed_url = match ease::Url::parse(url).map_err(|e| e.to_string()) {
-            Ok(u) => u,
-            Err(e) => {
-                error!("{}", e);
-                return;
-            }
-        };
-        let mut req = ease::Request::new(parsed_url);
-        req.body(ceph_event.to_json().clone());
-        match req.post() {
-            Ok(_) => {
-                info!("Logged to ES");
-                // return Ok(());},
-            }
-            Err(_) => {
-                error!("ES POST FAILED");
-                // return Err("Post operation failed".to_string());
-            }
-        }
-    }
 }
 
 fn log_to_stdout(args: &Args, ceph_event: &health::CephHealth) {
@@ -206,7 +178,6 @@ fn main() {
                 }
             };
 
-            log_to_es(&args, &ceph_event);
             log_to_stdout(&args, &ceph_event);
             log_to_influx(&args, &ceph_event);
             log_to_carbon(&args, &ceph_event);
