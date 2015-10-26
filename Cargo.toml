@@ -6,7 +6,6 @@ authors = ["Chris MacNaughton <chmacnaughton@gmail.com>"]
 [dependencies]
 rustc-serialize = "*"
 time="*"
-ease="*"
 log = "*"
 simple_logger = "*"
 uuid = "*"
