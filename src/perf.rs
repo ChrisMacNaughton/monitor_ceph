@@ -1,9 +1,22 @@
 extern crate rustc_serialize;
+extern crate time;
+use influent::create_client;
+use influent::client::Client;
+use influent::client::Credentials;
+use influent::measurement::{Measurement, Value};
+use output_args::*;
+use rustc_serialize::{Decoder, json};
+use std::io::prelude::*;
+use std::net::TcpStream;
 
-use rustc_serialize::{Decodable, Decoder, json};
+fn get_time() -> f64 {
+    let now = time::now();
+    let milliseconds_since_epoch = now.to_timespec().sec * 1000;
+    return milliseconds_since_epoch as f64;
+}
 
 #[derive(Debug, RustcDecodable)]
-struct JsonWbthrottle {
+struct Wbthrottle {
     bytes_dirtied: i64,
     bytes_wb: i64,
     ios_dirtied: i64,
@@ -13,45 +26,45 @@ struct JsonWbthrottle {
 }
 
 #[derive(Debug, RustcDecodable)]
-struct JsonFilestoreJournalLatency {
+struct FilestoreJournalLatency {
     avgcount: i64,
     sum: f64,
 }
 
 #[derive(Debug, RustcDecodable)]
-struct JsonFilestoreJournalWrByte {
+struct FilestoreJournalWrByte {
     avgcount: i64,
     sum: i64,
 }
 
 #[derive(Debug, RustcDecodable)]
-struct JsonFilestore {
+struct Filestore {
     journal_queue_max_ops: i64,
     journal_queue_ops: i64,
     journal_ops: i64,
     journal_queue_max_bytes: i64,
     journal_queue_bytes: i64,
     journal_bytes: i64,
-    journal_latency: JsonFilestoreJournalLatency,
+    journal_latency: FilestoreJournalLatency,
     journal_wr: i64,
-    journal_wr_bytes: JsonFilestoreJournalWrByte,
+    journal_wr_bytes: FilestoreJournalWrByte,
     journal_full: i64,
     committing: i64,
     commitcycle: i64,
-    commitcycle_interval: JsonFilestoreJournalLatency,
-    commitcycle_latency: JsonFilestoreJournalLatency,
+    commitcycle_interval: FilestoreJournalLatency,
+    commitcycle_latency: FilestoreJournalLatency,
     op_queue_max_ops: i64,
     op_queue_ops: i64,
     ops: i64,
     op_queue_max_bytes: i64,
     op_queue_bytes: i64,
     bytes: i64,
-    apply_latency: JsonFilestoreJournalLatency,
-    queue_transaction_latency_avg: JsonFilestoreJournalLatency,
+    apply_latency: FilestoreJournalLatency,
+    queue_transaction_latency_avg: FilestoreJournalLatency,
 }
 
 #[derive(Debug, RustcDecodable)]
-struct JsonLeveldb {
+struct Leveldb {
     leveldb_get: i64,
     leveldb_transaction: i64,
     leveldb_compact: i64,
@@ -61,12 +74,12 @@ struct JsonLeveldb {
 }
 
 #[derive(Debug, RustcDecodable)]
-struct JsonMutexFilejournalCompletionsLock {
-    wait: JsonFilestoreJournalLatency,
+struct MutexFilejournalCompletionsLock {
+    wait: FilestoreJournalLatency,
 }
 
 #[derive(Debug, RustcDecodable)]
-struct JsonObjecter {
+struct Objecter {
     op_active: i64,
     op_laggy: i64,
     op_send: i64,
@@ -131,40 +144,40 @@ struct JsonObjecter {
 }
 
 #[derive(Debug, RustcDecodable)]
-struct JsonOsd {
+struct Osd {
     opq: i64,
     op_wip: i64,
     op: i64,
     op_in_bytes: i64,
     op_out_bytes: i64,
-    op_latency: JsonFilestoreJournalLatency,
-    op_process_latency: JsonFilestoreJournalLatency,
+    op_latency: FilestoreJournalLatency,
+    op_process_latency: FilestoreJournalLatency,
     op_r: i64,
     op_r_out_bytes: i64,
-    op_r_latency: JsonFilestoreJournalLatency,
-    op_r_process_latency: JsonFilestoreJournalLatency,
+    op_r_latency: FilestoreJournalLatency,
+    op_r_process_latency: FilestoreJournalLatency,
     op_w: i64,
     op_w_in_bytes: i64,
-    op_w_rlat: JsonFilestoreJournalLatency,
-    op_w_latency: JsonFilestoreJournalLatency,
-    op_w_process_latency: JsonFilestoreJournalLatency,
+    op_w_rlat: FilestoreJournalLatency,
+    op_w_latency: FilestoreJournalLatency,
+    op_w_process_latency: FilestoreJournalLatency,
     op_rw: i64,
     op_rw_in_bytes: i64,
     op_rw_out_bytes: i64,
-    op_rw_rlat: JsonFilestoreJournalLatency,
-    op_rw_latency: JsonFilestoreJournalLatency,
-    op_rw_process_latency: JsonFilestoreJournalLatency,
+    op_rw_rlat: FilestoreJournalLatency,
+    op_rw_latency: FilestoreJournalLatency,
+    op_rw_process_latency: FilestoreJournalLatency,
     subop: i64,
     subop_in_bytes: i64,
-    subop_latency: JsonFilestoreJournalLatency,
+    subop_latency: FilestoreJournalLatency,
     subop_w: i64,
     subop_w_in_bytes: i64,
-    subop_w_latency: JsonFilestoreJournalLatency,
+    subop_w_latency: FilestoreJournalLatency,
     subop_pull: i64,
-    subop_pull_latency: JsonFilestoreJournalLatency,
+    subop_pull_latency: FilestoreJournalLatency,
     subop_push: i64,
     subop_push_in_bytes: i64,
-    subop_push_latency: JsonFilestoreJournalLatency,
+    subop_push_latency: FilestoreJournalLatency,
     pull: i64,
     push: i64,
     push_out_bytes: i64,
@@ -203,41 +216,42 @@ struct JsonOsd {
     agent_evict: i64,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, RustcDecodable)]
-struct JsonRecoverystatePerf {
-    initial_latency: JsonFilestoreJournalLatency,
-    started_latency: JsonFilestoreJournalLatency,
-    reset_latency: JsonFilestoreJournalLatency,
-    start_latency: JsonFilestoreJournalLatency,
-    primary_latency: JsonFilestoreJournalLatency,
-    peering_latency: JsonFilestoreJournalLatency,
-    backfilling_latency: JsonFilestoreJournalLatency,
-    waitremotebackfillreserved_latency: JsonFilestoreJournalLatency,
-    waitlocalbackfillreserved_latency: JsonFilestoreJournalLatency,
-    notbackfilling_latency: JsonFilestoreJournalLatency,
-    repnotrecovering_latency: JsonFilestoreJournalLatency,
-    repwaitrecoveryreserved_latency: JsonFilestoreJournalLatency,
-    repwaitbackfillreserved_latency: JsonFilestoreJournalLatency,
-    RepRecovering_latency: JsonFilestoreJournalLatency,
-    activating_latency: JsonFilestoreJournalLatency,
-    waitlocalrecoveryreserved_latency: JsonFilestoreJournalLatency,
-    waitremoterecoveryreserved_latency: JsonFilestoreJournalLatency,
-    recovering_latency: JsonFilestoreJournalLatency,
-    recovered_latency: JsonFilestoreJournalLatency,
-    clean_latency: JsonFilestoreJournalLatency,
-    active_latency: JsonFilestoreJournalLatency,
-    replicaactive_latency: JsonFilestoreJournalLatency,
-    stray_latency: JsonFilestoreJournalLatency,
-    getinfo_latency: JsonFilestoreJournalLatency,
-    getlog_latency: JsonFilestoreJournalLatency,
-    waitactingchange_latency: JsonFilestoreJournalLatency,
-    incomplete_latency: JsonFilestoreJournalLatency,
-    getmissing_latency: JsonFilestoreJournalLatency,
-    waitupthru_latency: JsonFilestoreJournalLatency,
+struct RecoverystatePerf {
+    initial_latency: FilestoreJournalLatency,
+    started_latency: FilestoreJournalLatency,
+    reset_latency: FilestoreJournalLatency,
+    start_latency: FilestoreJournalLatency,
+    primary_latency: FilestoreJournalLatency,
+    peering_latency: FilestoreJournalLatency,
+    backfilling_latency: FilestoreJournalLatency,
+    waitremotebackfillreserved_latency: FilestoreJournalLatency,
+    waitlocalbackfillreserved_latency: FilestoreJournalLatency,
+    notbackfilling_latency: FilestoreJournalLatency,
+    repnotrecovering_latency: FilestoreJournalLatency,
+    repwaitrecoveryreserved_latency: FilestoreJournalLatency,
+    repwaitbackfillreserved_latency: FilestoreJournalLatency,
+    RepRecovering_latency: FilestoreJournalLatency,
+    activating_latency: FilestoreJournalLatency,
+    waitlocalrecoveryreserved_latency: FilestoreJournalLatency,
+    waitremoterecoveryreserved_latency: FilestoreJournalLatency,
+    recovering_latency: FilestoreJournalLatency,
+    recovered_latency: FilestoreJournalLatency,
+    clean_latency: FilestoreJournalLatency,
+    active_latency: FilestoreJournalLatency,
+    replicaactive_latency: FilestoreJournalLatency,
+    stray_latency: FilestoreJournalLatency,
+    getinfo_latency: FilestoreJournalLatency,
+    getlog_latency: FilestoreJournalLatency,
+    waitactingchange_latency: FilestoreJournalLatency,
+    incomplete_latency: FilestoreJournalLatency,
+    getmissing_latency: FilestoreJournalLatency,
+    waitupthru_latency: FilestoreJournalLatency,
 }
 
 #[derive(Debug, RustcDecodable)]
-struct JsonThrottleFilestoreByte {
+struct ThrottleFilestoreByte {
     val: i64,
     max: i64,
     get: i64,
@@ -248,45 +262,147 @@ struct JsonThrottleFilestoreByte {
     take_sum: i64,
     put: i64,
     put_sum: i64,
-    wait: JsonFilestoreJournalLatency,
+    wait: FilestoreJournalLatency,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, RustcDecodable)]
-struct PerfJson {
-    WBThrottle: JsonWbthrottle,
-    filestore: JsonFilestore,
-    leveldb: JsonLeveldb,
-    mutex_FileJournal_completions_lock: JsonMutexFilejournalCompletionsLock,
-    mutex_FileJournal_finisher_lock: JsonMutexFilejournalCompletionsLock,
-    mutex_FileJournal_write_lock: JsonMutexFilejournalCompletionsLock,
-    mutex_FileJournal_writeq_lock: JsonMutexFilejournalCompletionsLock,
-    mutex_JOS_ApplyManager_apply_lock: JsonMutexFilejournalCompletionsLock,
-    mutex_JOS_ApplyManager_com_lock: JsonMutexFilejournalCompletionsLock,
-    mutex_JOS_SubmitManager_lock: JsonMutexFilejournalCompletionsLock,
-    mutex_WBThrottle_lock: JsonMutexFilejournalCompletionsLock,
-    objecter: JsonObjecter,
-    osd: JsonOsd,
-    recoverystate_perf: JsonRecoverystatePerf,
-    throttle_filestore_bytes: JsonThrottleFilestoreByte,
-    throttle_filestore_ops: JsonThrottleFilestoreByte,
-    throttle_msgr_dispatch_throttler_client: JsonThrottleFilestoreByte,
-    throttle_msgr_dispatch_throttler_cluster: JsonThrottleFilestoreByte,
-    throttle_msgr_dispatch_throttler_hb_back_server: JsonThrottleFilestoreByte,
-    throttle_msgr_dispatch_throttler_hb_front_server: JsonThrottleFilestoreByte,
-    throttle_msgr_dispatch_throttler_hbclient: JsonThrottleFilestoreByte,
-    throttle_msgr_dispatch_throttler_ms_objecter: JsonThrottleFilestoreByte,
-    throttle_objecter_bytes: JsonThrottleFilestoreByte,
-    throttle_objecter_ops: JsonThrottleFilestoreByte,
-    throttle_osd_client_bytes: JsonThrottleFilestoreByte,
-    throttle_osd_client_messages: JsonThrottleFilestoreByte,
+pub struct OsdPerf {
+    WBThrottle: Wbthrottle,
+    filestore: Filestore,
+    leveldb: Leveldb,
+    mutex_FileJournal_completions_lock: MutexFilejournalCompletionsLock,
+    mutex_FileJournal_finisher_lock: MutexFilejournalCompletionsLock,
+    mutex_FileJournal_write_lock: MutexFilejournalCompletionsLock,
+    mutex_FileJournal_writeq_lock: MutexFilejournalCompletionsLock,
+    mutex_JOS_ApplyManager_apply_lock: MutexFilejournalCompletionsLock,
+    mutex_JOS_ApplyManager_com_lock: MutexFilejournalCompletionsLock,
+    mutex_JOS_SubmitManager_lock: MutexFilejournalCompletionsLock,
+    mutex_WBThrottle_lock: MutexFilejournalCompletionsLock,
+    objecter: Objecter,
+    osd: Osd,
+    recoverystate_perf: RecoverystatePerf,
+    throttle_filestore_bytes: ThrottleFilestoreByte,
+    throttle_filestore_ops: ThrottleFilestoreByte,
+    throttle_msgr_dispatch_throttler_client: ThrottleFilestoreByte,
+    throttle_msgr_dispatch_throttler_cluster: ThrottleFilestoreByte,
+    throttle_msgr_dispatch_throttler_hb_back_server: ThrottleFilestoreByte,
+    throttle_msgr_dispatch_throttler_hb_front_server: ThrottleFilestoreByte,
+    throttle_msgr_dispatch_throttler_hbclient: ThrottleFilestoreByte,
+    throttle_msgr_dispatch_throttler_ms_objecter: ThrottleFilestoreByte,
+    throttle_objecter_bytes: ThrottleFilestoreByte,
+    throttle_objecter_ops: ThrottleFilestoreByte,
+    throttle_osd_client_bytes: ThrottleFilestoreByte,
+    throttle_osd_client_messages: ThrottleFilestoreByte,
 }
 
-impl PerfJson{
+#[allow(dead_code)]
+impl OsdPerf{
     pub fn decode(json_data: &str) -> Result<Self, json::DecoderError> {
-        let decode: PerfJson = try!(json::decode(json_data));
+        let decode: OsdPerf = try!(json::decode(json_data));
         return Ok(decode);
     }
-    pub fn to_carbon_string(&self, root_key: &String) -> String {
-        return "".to_string();
+
+    pub fn log(&self, args: &Args) {
+        self.log_to_stdout(args);
+        self.log_to_influx(args);
+        self.log_to_carbon(args);
+    }
+
+    fn log_to_stdout(&self, args: &Args) {
+        if args.outputs.contains(&"stdout".to_string()) {
+            println!("{:?}", self);
+        }
+    }
+
+    fn log_to_influx(&self, args: &Args) {
+        if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
+            let influx = &args.influx.clone().unwrap();
+            let credentials = Credentials {
+                username: influx.user.as_ref(),
+                password: influx.password.as_ref(),
+                database: "ceph",
+            };
+            let host = format!("http://{}:{}", influx.host, influx.port);
+            let hosts = vec![host.as_ref()];
+            let client = create_client(credentials, hosts);
+
+            let mut measurement = Measurement::new("osd"); //TODO: Does this need the osd number also?
+            measurement.add_field("load_avg",
+                                  Value::Integer(self.osd.loadavg));
+            measurement.add_field("op_latency",
+                                  Value::Integer(self.osd.op_latency.sum as i64));
+            measurement.add_field("op_r_latency",
+                                  Value::Integer(self.osd.op_r_latency.sum as i64));
+            measurement.add_field("op_w_latency",
+                                  Value::Integer(self.osd.op_w_latency.sum as i64));
+            measurement.add_field("subop_latency",
+                                  Value::Integer(self.osd.subop_latency.sum as i64));
+            measurement.add_field("subop_w_latency",
+                                  Value::Integer(self.osd.subop_w_latency.sum as i64));
+            measurement.add_field("journal_latency",
+                                  Value::Integer(self.filestore.journal_latency.sum as i64));
+            measurement.add_field("apply_latency",
+                                  Value::Integer(self.filestore.apply_latency.sum as i64));
+            measurement.add_field("queue_transaction_latency_avg",
+                                  Value::Integer(self.filestore.queue_transaction_latency_avg.sum as i64));
+
+            let res = client.write_one(measurement, None);
+
+            debug!("{:?}", res);
+        }
+    }
+
+    fn log_packet_to_carbon(carbon_url: &str, carbon_data: String) -> Result<(), String> {
+        let mut stream = try!(TcpStream::connect(carbon_url).map_err(|e| e.to_string()));
+        let bytes_written = try!(stream.write(&carbon_data.into_bytes()[..])
+                                       .map_err(|e| e.to_string()));
+        info!("Wrote: {} bytes to graphite", &bytes_written);
+        Ok(())
+    }
+
+    fn log_to_carbon(&self, args: &Args) {
+        if args.outputs.contains(&"carbon".to_string()) && args.carbon.is_some() {
+            let carbon = &args.carbon.clone().unwrap();
+            let carbon_data = self.to_carbon_string(&carbon.root_key);
+
+            let carbon_host = &carbon.host;
+            let carbon_port = &carbon.port;
+            let carbon_url = format!("{}:{}", carbon_host, carbon_port);
+            let _ = OsdPerf::log_packet_to_carbon(carbon_url.as_ref(), carbon_data);
+        }
+    }
+
+    fn to_carbon_string(&self, root_key: &String) -> String {
+        format!(r#"{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+"#,
+                "load_avg",
+                self.osd.loadavg,
+                "op_latency",
+                self.osd.op_latency.sum,
+                "op_r_latency",
+                self.osd.op_r_latency.sum,
+                "op_w_latency",
+                self.osd.op_w_latency.sum,
+                "subop_latency",
+                self.osd.subop_latency.sum,
+                "subop_w_latency",
+                self.osd.subop_w_latency.sum,
+                "journal_latency",
+                self.filestore.journal_latency.sum,
+                "apply_latency",
+                self.filestore.apply_latency.sum,
+                "queue_transaction_latency_avg",
+                self.filestore.queue_transaction_latency_avg.sum,
+                root_key = root_key.clone(),
+                timestamp = get_time() / 1000.0)
     }
 }
