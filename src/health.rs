@@ -83,7 +83,7 @@ impl CephHealth{
         let mut stream = try!(TcpStream::connect(carbon_url).map_err(|e| e.to_string()));
         let bytes_written = try!(stream.write(&carbon_data.into_bytes()[..])
                                        .map_err(|e| e.to_string()));
-        info!("Wrote: {} bytes to graphite", &bytes_written);
+        debug!("Wrote: {} bytes to graphite", &bytes_written);
         Ok(())
     }
 

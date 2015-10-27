@@ -206,7 +206,7 @@ dependencies = [
 [[package]]
 name = "output_args"
 version = "0.1.0"
-source = "git+https://github.com/ChrisMacNaughton/ceph_cli_args.git#7f1c92ba11d0fc56e60c0e78dfc042ba81c7fb39"
+source = "git+https://github.com/ChrisMacNaughton/ceph_cli_args.git#a19f68074249d13156e2d31844dc5dae666de533"
 dependencies = [
  "clap 1.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",

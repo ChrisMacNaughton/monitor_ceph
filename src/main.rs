@@ -20,7 +20,6 @@ mod perf;
 mod health;
 
 // crates
-use log::LogLevel;
 use output_args::*;
 use regex::Regex;
 
@@ -47,7 +46,7 @@ fn get_ceph_stats() -> Result<String, String> {
 fn get_osd_perf(osd_num: u32) -> Result<String, String> {
     let output = Command::new("/usr/bin/ceph")
                          .arg("daemon")
-                         .arg(format!("osd-{}", osd_num))
+                         .arg(format!("osd.{}", osd_num))
                          .arg("perf")
                          .arg("dump")
                          .output()
@@ -119,8 +118,9 @@ fn get_osds() -> Result<Vec<u32>, std::io::Error> {
 }
 
 fn main() {
-    // TODO make configurable via cli or config arg
-    simple_logger::init_with_level(LogLevel::Info).unwrap();
+    let args = get_config();
+
+    simple_logger::init_with_level(args.log_level.clone()).unwrap();
 
     let periodic = timer_periodic(1000);
 
@@ -135,7 +135,7 @@ fn main() {
         }
     };
 
-    let args = get_config();
+
     debug!("{:?}", args);
     loop {
         let _ = periodic.recv();
@@ -172,7 +172,7 @@ fn main() {
                     continue;
                 }
             };
-            ceph_event.log(&args);
+            ceph_event.log(&args, *osd_num);
         }
     }
 }

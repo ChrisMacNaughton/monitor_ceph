@@ -299,23 +299,25 @@ pub struct OsdPerf {
 #[allow(dead_code)]
 impl OsdPerf{
     pub fn decode(json_data: &str) -> Result<Self, json::DecoderError> {
-        let decode: OsdPerf = try!(json::decode(json_data));
+        let mut json = str::replace(json_data, "-", "_");
+        json = str::replace(json.as_ref(), "::", "_");
+        let decode: OsdPerf = try!(json::decode(json.as_ref()));
         return Ok(decode);
     }
 
-    pub fn log(&self, args: &Args) {
-        self.log_to_stdout(args);
-        self.log_to_influx(args);
-        self.log_to_carbon(args);
+    pub fn log(&self, args: &Args, osd_num: u32) {
+        self.log_to_stdout(args, osd_num);
+        self.log_to_influx(args, osd_num);
+        self.log_to_carbon(args, osd_num);
     }
 
-    fn log_to_stdout(&self, args: &Args) {
+    fn log_to_stdout(&self, args: &Args, osd_num: u32) {
         if args.outputs.contains(&"stdout".to_string()) {
-            println!("{:?}", self);
+            println!("osd.{}: {:?}", osd_num, self);
         }
     }
 
-    fn log_to_influx(&self, args: &Args) {
+    fn log_to_influx(&self, args: &Args, osd_num: u32) {
         if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
             let influx = &args.influx.clone().unwrap();
             let credentials = Credentials {
@@ -326,8 +328,10 @@ impl OsdPerf{
             let host = format!("http://{}:{}", influx.host, influx.port);
             let hosts = vec![host.as_ref()];
             let client = create_client(credentials, hosts);
+            let osd = format!("{}", osd_num.clone());
+            let mut measurement = Measurement::new("osd");
 
-            let mut measurement = Measurement::new("osd"); //TODO: Does this need the osd number also?
+            measurement.add_tag("osd", osd.as_ref());
             measurement.add_field("load_avg",
                                   Value::Integer(self.osd.loadavg));
             measurement.add_field("op_latency",
@@ -357,14 +361,14 @@ impl OsdPerf{
         let mut stream = try!(TcpStream::connect(carbon_url).map_err(|e| e.to_string()));
         let bytes_written = try!(stream.write(&carbon_data.into_bytes()[..])
                                        .map_err(|e| e.to_string()));
-        info!("Wrote: {} bytes to graphite", &bytes_written);
+        debug!("Wrote: {} bytes to graphite", &bytes_written);
         Ok(())
     }
 
-    fn log_to_carbon(&self, args: &Args) {
+    fn log_to_carbon(&self, args: &Args, osd_num: u32) {
         if args.outputs.contains(&"carbon".to_string()) && args.carbon.is_some() {
             let carbon = &args.carbon.clone().unwrap();
-            let carbon_data = self.to_carbon_string(&carbon.root_key);
+            let carbon_data = self.to_carbon_string(&carbon.root_key, osd_num);
 
             let carbon_host = &carbon.host;
             let carbon_port = &carbon.port;
@@ -373,7 +377,7 @@ impl OsdPerf{
         }
     }
 
-    fn to_carbon_string(&self, root_key: &String) -> String {
+    fn to_carbon_string(&self, root_key: &String, osd_num: u32) -> String {
         format!(r#"{root_key}.{} {} {timestamp}
 {root_key}.{} {} {timestamp}
 {root_key}.{} {} {timestamp}
@@ -402,7 +406,7 @@ impl OsdPerf{
                 self.filestore.apply_latency.sum,
                 "queue_transaction_latency_avg",
                 self.filestore.queue_transaction_latency_avg.sum,
-                root_key = root_key.clone(),
+                root_key = format!("{}-osd.{}",root_key.clone(), osd_num),
                 timestamp = get_time() / 1000.0)
     }
 }
