@@ -1,14 +1,9 @@
 extern crate rustc_serialize;
 extern crate time;
-use influent::create_client;
-use influent::client::Client;
-use influent::client::Credentials;
 use influent::measurement::{Measurement, Value};
 use output_args::*;
 use rustc_serialize::{Decoder, json};
-use std::io::prelude::*;
-use std::net::TcpStream;
-
+use communication;
 fn get_time() -> f64 {
     let now = time::now();
     let milliseconds_since_epoch = now.to_timespec().sec * 1000;
@@ -319,15 +314,6 @@ impl OsdPerf{
 
     fn log_to_influx(&self, args: &Args, osd_num: u32) {
         if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
-            let influx = &args.influx.clone().unwrap();
-            let credentials = Credentials {
-                username: influx.user.as_ref(),
-                password: influx.password.as_ref(),
-                database: "ceph",
-            };
-            let host = format!("http://{}:{}", influx.host, influx.port);
-            let hosts = vec![host.as_ref()];
-            let client = create_client(credentials, hosts);
             let osd = format!("{}", osd_num.clone());
             let mut measurement = Measurement::new("osd");
 
@@ -351,29 +337,16 @@ impl OsdPerf{
             measurement.add_field("queue_transaction_latency_avg",
                                   Value::Integer(self.filestore.queue_transaction_latency_avg.sum as i64));
 
-            let res = client.write_one(measurement, None);
-
-            debug!("{:?}", res);
+            communication::send_to_influx(args, measurement);
         }
     }
 
-    fn log_packet_to_carbon(carbon_url: &str, carbon_data: String) -> Result<(), String> {
-        let mut stream = try!(TcpStream::connect(carbon_url).map_err(|e| e.to_string()));
-        let bytes_written = try!(stream.write(&carbon_data.into_bytes()[..])
-                                       .map_err(|e| e.to_string()));
-        debug!("Wrote: {} bytes to graphite", &bytes_written);
-        Ok(())
-    }
 
     fn log_to_carbon(&self, args: &Args, osd_num: u32) {
         if args.outputs.contains(&"carbon".to_string()) && args.carbon.is_some() {
             let carbon = &args.carbon.clone().unwrap();
             let carbon_data = self.to_carbon_string(&carbon.root_key, osd_num);
-
-            let carbon_host = &carbon.host;
-            let carbon_port = &carbon.port;
-            let carbon_url = format!("{}:{}", carbon_host, carbon_port);
-            let _ = OsdPerf::log_packet_to_carbon(carbon_url.as_ref(), carbon_data);
+            let _ = communication::send_to_carbon(args, carbon_data);
         }
     }
 

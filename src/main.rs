@@ -18,6 +18,7 @@ use std::io::prelude::*;
 // modules
 mod perf;
 mod health;
+mod communication;
 
 // crates
 use output_args::*;
