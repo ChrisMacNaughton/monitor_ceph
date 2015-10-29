@@ -13,7 +13,7 @@ use std::str::FromStr;
 use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc::Receiver;
-use std::fs::{self};
+use std::fs;
 use std::io::prelude::*;
 use unix_socket::UnixStream;
 
@@ -46,26 +46,60 @@ fn get_ceph_stats() -> Result<String, String> {
     Ok(output_string)
 }
 
+fn osd_exists(osd_num: u32) -> bool {
+    let files = match fs::read_dir(Path::new("/var/run/ceph")) {
+        Ok(dir) => dir,
+        Err(e) => {
+            info!("Can't get path: {:?}", e);
+            return false;
+        }
+    };
+
+    for entry in files {
+
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let sock_addr_osstr = entry.file_name();
+        let file_name = match sock_addr_osstr.to_str(){
+            Some(name) => name,
+            None => continue, //Skip files we can't turn into a string
+        };
+        trace!("Checking if {} exists", file_name);
+        if file_name == format!("ceph-osd.{}.asok", osd_num) {
+            return true;
+        }
+    }
+    false
+}
+
 fn get_osd_perf(osd_num: u32) -> Result<String, String> {
-    let mut output_string = String::new();
     let sock_path = format!("/var/run/ceph/ceph-osd.{}.asok", osd_num);
     let sock_str: &str = sock_path.as_ref();
-    let mut stream= UnixStream::connect(sock_str).unwrap();
+
+    if !osd_exists(osd_num){
+        return Err("OSD no longer exists".to_string());
+    }
+    let mut output_buf = Vec::new();
+    let mut stream = UnixStream::connect(sock_str).unwrap();
 
     let _ = stream.write(b"{\"prefix\": \"perf dump\"}\0");
-    let _ = stream.read_to_string(&mut output_string).unwrap();
-    // output_string.replace("/\u{04}", "");
+    let _ = match stream.read_to_end(&mut output_buf) {
+        Ok(s) => s,
+        Err(e) => {
+            warn!("Got an error from the socket: {:?}\n{:?}", e, output_buf);
+            return Err(format!("{:?}", e));
+        }
+    };
+    let mut output_string = String::from_utf8_lossy(&output_buf).to_string();
     for c in output_string.clone().chars() {
         if c == '{' {
             break;
         }
+        trace!("Removing '{}' from json", c);
         output_string.remove(0);
     }
-
-    // let output_string = match str::from_utf8(&buf) {
-    //     Ok(o) => o,
-    //     Err(_) => "{}",
-    // };
 
     Ok(output_string)
 }
@@ -83,7 +117,7 @@ fn has_child_directory(dir: &Path) -> Result<bool, std::io::Error> {
 }
 
 // Look for /var/lib/ceph/mon/ceph-ip-172-31-24-128
-fn is_monitor() -> bool {
+fn check_is_monitor() -> bool {
     // does it have a mon directory entry?
     match has_child_directory(Path::new("/var/lib/ceph/mon")){
         Ok(result) => result,
@@ -93,7 +127,7 @@ fn is_monitor() -> bool {
 
 //NOTE: This skips a lot of failure cases
 // Check for osd sockets and give back a vec of osd numbers that are active
-fn get_osds() -> Result<Vec<u32>, std::io::Error> {
+fn get_osds_with_match() -> Result<Vec<u32>, std::io::Error> {
     let mut osds: Vec<u32> = Vec::new();
 
     let osd_regex = Regex::new(r"ceph-osd.(?P<number>\d+).asok").unwrap();
@@ -129,6 +163,16 @@ fn get_osds() -> Result<Vec<u32>, std::io::Error> {
     return Ok(osds);
 }
 
+fn get_osds() -> Vec<u32> {
+    match get_osds_with_match() {
+        Ok(list) => list,
+        Err(_) => {
+            info!("No OSDs found");
+            vec![]
+        }
+    }
+}
+
 fn main() {
     let args = get_config();
 
@@ -136,19 +180,15 @@ fn main() {
 
     let periodic = timer_periodic(1000);
 
-    let is_monitor = is_monitor();
+    let mut is_monitor = check_is_monitor();
 
-    let osd_list = match get_osds(){
-        Ok(list) => list,
-        Err(_) => {
-            info!("No OSDs found");
-            vec![]
-        }
-    };
+    let mut osd_list = get_osds();
 
 
     debug!("{:?}", args);
+    let mut i = 0;
     loop {
+        i = i + 1;
         let _ = periodic.recv();
         trace!("Going around again!");
         // Grab stats from the ceph monitor
@@ -156,7 +196,10 @@ fn main() {
             trace!("Getting MON info");
             let json = match get_ceph_stats() {
                 Ok(json) => json,
-                Err(_) => "{}".to_string(),
+                Err(_) => {
+                    is_monitor = check_is_monitor();
+                    "{}".to_string()
+                },
             };
             trace!("Got MON JSON: {}", json);
             let ceph_event = match health::CephHealth::decode(&json) {
@@ -170,22 +213,34 @@ fn main() {
         }
 
         //Now the osds
-        for osd_num in osd_list.iter(){
+        for osd_num in osd_list.clone().iter(){
             trace!("Getting OSD info for {}", osd_num);
             let json = match get_osd_perf(*osd_num){
                 Ok(json) => json,
-                Err(_) => "{}".to_string(),
+                Err(e) => {
+                    osd_list = get_osds();
+                    trace!("[OSD] There was an error: {:?}", e);
+                    continue;
+                }
             };
             trace!("Got OSD JSON: {}", json);
             let ceph_event = match perf::OsdPerf::decode(&json) {
-                Ok(json) => json,
+                Ok(event) => event,
                 Err(error) => {
-                    warn!("[OSD] There was an error: {:?}", error);
+                    warn!("[OSD] There was an error: {:?}\n{}", error, json);
                     continue;
                 }
             };
             ceph_event.log(&args, *osd_num);
         }
+        osd_list = match i % 10 {
+            0 => get_osds(),
+            _ => osd_list,
+        };
+        is_monitor = match i % 10 {
+            0 => check_is_monitor(),
+            _ => is_monitor,
+        };
     }
 }
 
