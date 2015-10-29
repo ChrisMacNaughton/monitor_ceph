@@ -6,6 +6,7 @@ extern crate regex;
 extern crate rustc_serialize;
 extern crate simple_logger;
 extern crate time;
+extern crate unix_socket;
 
 // std
 use std::str::FromStr;
@@ -14,6 +15,7 @@ use std::process::Command;
 use std::sync::mpsc::Receiver;
 use std::fs::{self};
 use std::io::prelude::*;
+use unix_socket::UnixStream;
 
 // modules
 mod perf;
@@ -45,17 +47,26 @@ fn get_ceph_stats() -> Result<String, String> {
 }
 
 fn get_osd_perf(osd_num: u32) -> Result<String, String> {
-    let output = Command::new("/usr/bin/ceph")
-                         .arg("daemon")
-                         .arg(format!("osd.{}", osd_num))
-                         .arg("perf")
-                         .arg("dump")
-                         .output()
-                         .unwrap_or_else(|e| panic!("failed to execute ceph process: {}", e));
-    let output_string = match String::from_utf8(output.stdout) {
-        Ok(v) => v,
-        Err(_) => "{}".to_string(),
-    };
+    let mut output_string = String::new();
+    let sock_path = format!("/var/run/ceph/ceph-osd.{}.asok", osd_num);
+    let sock_str: &str = sock_path.as_ref();
+    let mut stream= UnixStream::connect(sock_str).unwrap();
+
+    let _ = stream.write(b"{\"prefix\": \"perf dump\"}\0");
+    let _ = stream.read_to_string(&mut output_string).unwrap();
+    // output_string.replace("/\u{04}", "");
+    for c in output_string.clone().chars() {
+        if c == '{' {
+            break;
+        }
+        output_string.remove(0);
+    }
+
+    // let output_string = match str::from_utf8(&buf) {
+    //     Ok(o) => o,
+    //     Err(_) => "{}",
+    // };
+
     Ok(output_string)
 }
 
@@ -128,11 +139,10 @@ fn main() {
     let is_monitor = is_monitor();
 
     let osd_list = match get_osds(){
-        Ok(json) => json,
-        Err(error) => {
-            warn!("Error getting osd list {:?}", error);
-            //TODO: What should we do here?
-            return;
+        Ok(list) => list,
+        Err(_) => {
+            info!("No OSDs found");
+            vec![]
         }
     };
 
@@ -140,19 +150,19 @@ fn main() {
     debug!("{:?}", args);
     loop {
         let _ = periodic.recv();
-
+        trace!("Going around again!");
         // Grab stats from the ceph monitor
         if is_monitor {
-            let _ = periodic.recv();
+            trace!("Getting MON info");
             let json = match get_ceph_stats() {
                 Ok(json) => json,
                 Err(_) => "{}".to_string(),
             };
-
+            trace!("Got MON JSON: {}", json);
             let ceph_event = match health::CephHealth::decode(&json) {
                 Ok(json) => json,
                 Err(error) => {
-                    warn!("There was an error: {:?}", error);
+                    warn!("[MON] There was an error: {:?}", error);
                     continue;
                 }
             };
@@ -161,15 +171,16 @@ fn main() {
 
         //Now the osds
         for osd_num in osd_list.iter(){
+            trace!("Getting OSD info for {}", osd_num);
             let json = match get_osd_perf(*osd_num){
                 Ok(json) => json,
                 Err(_) => "{}".to_string(),
             };
-
+            trace!("Got OSD JSON: {}", json);
             let ceph_event = match perf::OsdPerf::decode(&json) {
                 Ok(json) => json,
                 Err(error) => {
-                    warn!("There was an error: {:?}", error);
+                    warn!("[OSD] There was an error: {:?}", error);
                     continue;
                 }
             };
