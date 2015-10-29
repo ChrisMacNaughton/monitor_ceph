@@ -92,12 +92,13 @@ fn get_osd_perf(osd_num: u32) -> Result<String, String> {
             return Err(format!("{:?}", e));
         }
     };
-    let mut output_string = String::from_utf8_lossy(&output_buf).to_string();
+    let mut output_string:String = String::from_utf8_lossy(&output_buf).to_string();
+    output_string = output_string.split_whitespace().collect();
+
     for c in output_string.clone().chars() {
         if c == '{' {
             break;
         }
-        trace!("Removing '{}' from json", c);
         output_string.remove(0);
     }
 
@@ -178,7 +179,7 @@ fn main() {
 
     simple_logger::init_with_level(args.log_level.clone()).unwrap();
 
-    let periodic = timer_periodic(1000);
+    let periodic = timer_periodic(5000);
 
     let mut is_monitor = check_is_monitor();
 
@@ -223,7 +224,7 @@ fn main() {
                     continue;
                 }
             };
-            trace!("Got OSD JSON: {}", json);
+            trace!("Got OSD JSON:\n{}", json);
             let ceph_event = match perf::OsdPerf::decode(&json) {
                 Ok(event) => event,
                 Err(error) => {
