@@ -2,6 +2,7 @@
 name = "ceph_monitor"
 version = "0.1.0"
 dependencies = [
+ "ceph 0.1.0 (git+https://github.com/ChrisMacNaughton/ceph-rs.git)",
  "influent 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "output_args 0.1.0 (git+https://github.com/ChrisMacNaughton/ceph_cli_args.git)",
@@ -9,7 +10,6 @@ dependencies = [
  "rustc-serialize 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "simple_logger 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "unix_socket 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "uuid 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -39,6 +39,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "bitflags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "ceph"
+version = "0.1.0"
+source = "git+https://github.com/ChrisMacNaughton/ceph-rs.git#91263647956ddd746253e1139d4e59c5db5915a8"
+dependencies = [
+ "log 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unix_socket 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "clap"

@@ -6,7 +6,7 @@ extern crate regex;
 extern crate rustc_serialize;
 extern crate simple_logger;
 extern crate time;
-extern crate unix_socket;
+extern crate ceph;
 
 // std
 use std::str::FromStr;
@@ -15,16 +15,16 @@ use std::process::Command;
 use std::sync::mpsc::Receiver;
 use std::fs;
 use std::io::prelude::*;
-use unix_socket::UnixStream;
 
 // modules
-mod perf;
+mod logging;
 mod health;
 mod communication;
 
 // crates
 use output_args::*;
 use regex::Regex;
+use ceph::*;
 
 fn get_config() -> output_args::Args {
     output_args::get_args()
@@ -46,64 +46,64 @@ fn get_ceph_stats() -> Result<String, String> {
     Ok(output_string)
 }
 
-fn osd_exists(osd_num: u32) -> bool {
-    let files = match fs::read_dir(Path::new("/var/run/ceph")) {
-        Ok(dir) => dir,
-        Err(e) => {
-            info!("Can't get path: {:?}", e);
-            return false;
-        }
-    };
+// fn osd_exists(osd_num: u32) -> bool {
+//     let files = match fs::read_dir(Path::new("/var/run/ceph")) {
+//         Ok(dir) => dir,
+//         Err(e) => {
+//             info!("Can't get path: {:?}", e);
+//             return false;
+//         }
+//     };
 
-    for entry in files {
+//     for entry in files {
 
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        let sock_addr_osstr = entry.file_name();
-        let file_name = match sock_addr_osstr.to_str(){
-            Some(name) => name,
-            None => continue, //Skip files we can't turn into a string
-        };
-        trace!("Checking if {} exists", file_name);
-        if file_name == format!("ceph-osd.{}.asok", osd_num) {
-            return true;
-        }
-    }
-    false
-}
+//         let entry = match entry {
+//             Ok(e) => e,
+//             Err(_) => continue,
+//         };
+//         let sock_addr_osstr = entry.file_name();
+//         let file_name = match sock_addr_osstr.to_str(){
+//             Some(name) => name,
+//             None => continue, //Skip files we can't turn into a string
+//         };
+//         trace!("Checking if {} exists", file_name);
+//         if file_name == format!("ceph-osd.{}.asok", osd_num) {
+//             return true;
+//         }
+//     }
+//     false
+// }
 
-fn get_osd_perf(osd_num: u32) -> Result<String, String> {
-    let sock_path = format!("/var/run/ceph/ceph-osd.{}.asok", osd_num);
-    let sock_str: &str = sock_path.as_ref();
+// fn get_osd_perf(osd_num: u32) -> Result<String, String> {
+//     let sock_path = format!("/var/run/ceph/ceph-osd.{}.asok", osd_num);
+//     let sock_str: &str = sock_path.as_ref();
 
-    if !osd_exists(osd_num){
-        return Err("OSD no longer exists".to_string());
-    }
-    let mut output_buf = Vec::new();
-    let mut stream = UnixStream::connect(sock_str).unwrap();
+//     if !osd_exists(osd_num){
+//         return Err("OSD no longer exists".to_string());
+//     }
+//     let mut output_buf = Vec::new();
+//     let mut stream = try!(UnixStream::connect(sock_str).map_err(|e| e.to_string()));
 
-    let _ = stream.write(b"{\"prefix\": \"perf dump\"}\0");
-    let _ = match stream.read_to_end(&mut output_buf) {
-        Ok(s) => s,
-        Err(e) => {
-            warn!("Got an error from the socket: {:?}\n{:?}", e, output_buf);
-            return Err(format!("{:?}", e));
-        }
-    };
-    let mut output_string:String = String::from_utf8_lossy(&output_buf).to_string();
-    output_string = output_string.split_whitespace().collect();
+//     let _ = stream.write(b"{\"prefix\": \"perf dump\"}\0");
+//     let _ = match stream.read_to_end(&mut output_buf) {
+//         Ok(s) => s,
+//         Err(e) => {
+//             warn!("Got an error from the socket: {:?}\n{:?}", e, output_buf);
+//             return Err(format!("{:?}", e));
+//         }
+//     };
+//     let mut output_string:String = String::from_utf8_lossy(&output_buf).to_string();
+//     output_string = output_string.split_whitespace().collect();
 
-    for c in output_string.clone().chars() {
-        if c == '{' {
-            break;
-        }
-        output_string.remove(0);
-    }
+//     for c in output_string.clone().chars() {
+//         if c == '{' {
+//             break;
+//         }
+//         output_string.remove(0);
+//     }
 
-    Ok(output_string)
-}
+//     Ok(output_string)
+// }
 
 fn has_child_directory(dir: &Path) -> Result<bool, std::io::Error> {
     if try!(fs::metadata(dir)).is_dir() {
@@ -215,24 +215,30 @@ fn main() {
 
         //Now the osds
         for osd_num in osd_list.clone().iter(){
-            trace!("Getting OSD info for {}", osd_num);
-            let json = match get_osd_perf(*osd_num){
-                Ok(json) => json,
-                Err(e) => {
-                    osd_list = get_osds();
-                    trace!("[OSD] There was an error: {:?}", e);
-                    continue;
-                }
-            };
-            trace!("Got OSD JSON:\n{}", json);
-            let ceph_event = match perf::OsdPerf::decode(&json) {
-                Ok(event) => event,
-                Err(error) => {
-                    warn!("[OSD] There was an error: {:?}\n{}", error, json);
-                    continue;
-                }
-            };
-            ceph_event.log(&args, *osd_num);
+            // trace!("Getting OSD info for {}", osd_num);
+            // let json = match get_osd_perf(*osd_num){
+            //     Ok(json) => json,
+            //     Err(e) => {
+            //         osd_list = get_osds();
+            //         trace!("[OSD] There was an error: {:?}", e);
+            //         continue;
+            //     }
+            // };
+            // trace!("Got OSD JSON:\n{}", json);
+            // let ceph_event = match perf::OsdPerf::decode(&json) {
+            //     Ok(event) => event,
+            //     Err(error) => {
+            //         warn!("[OSD] There was an error: {:?}\n{}", error, json);
+            //         continue;
+            //     }
+            // };
+            match ceph::osd_perf_dump(osd_num) {
+                Some(osd) => {
+                    logging::osd_perf::log(osd, &args, *osd_num);
+                },
+                None => continue,
+            }
+            // ceph_event.log(&args, *osd_num);
         }
         osd_list = match i % 10 {
             0 => get_osds(),
