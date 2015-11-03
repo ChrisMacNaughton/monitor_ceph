@@ -24,13 +24,6 @@ pub mod mon_perf {
     fn log_to_influx(perf_dump: &::ceph::mon::perf_dump::PerfDump, args: &Args) {
         if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
             let mut measurement = Measurement::new("monitor");
-            // measurement.add_field("ops",
-            //                       Value::Integer(ceph_event.pgmap.op_per_sec.unwrap_or(0) as i64));
-            // measurement.add_field("writes",
-            //                       Value::Integer(ceph_event.pgmap.write_bytes_sec.unwrap_or(0) as i64));
-            // measurement.add_field("reads",
-            //                       Value::Integer(ceph_event.pgmap.read_bytes_sec.unwrap_or(0) as i64));
-            
             // Cluster data
             measurement.add_field("used", Value::Integer(perf_dump.cluster.osd_kb_used as i64));
             measurement.add_field("avail", Value::Integer(perf_dump.cluster.osd_kb_avail as i64));
@@ -70,26 +63,6 @@ pub mod mon_perf {
             measurement.add_field("monitors_quorum",
                                   Value::Integer(perf_dump.cluster.num_mon_quorum as i64));
 
-            // measurement.add_tag("osd", osd.as_ref());
-            // measurement.add_field("load_avg",
-            //                       Value::Integer(perf_dump.osd.loadavg as i64));
-            // measurement.add_field("op_latency",
-            //                       Value::Integer(perf_dump.osd.op_latency.sum as i64));
-            // measurement.add_field("op_r_latency",
-            //                       Value::Integer(perf_dump.osd.op_r_latency.sum as i64));
-            // measurement.add_field("op_w_latency",
-            //                       Value::Integer(perf_dump.osd.op_w_latency.sum as i64));
-            // measurement.add_field("subop_latency",
-            //                       Value::Integer(perf_dump.osd.subop_latency.sum as i64));
-            // measurement.add_field("subop_w_latency",
-            //                       Value::Integer(perf_dump.osd.subop_w_latency.sum as i64));
-            // measurement.add_field("journal_latency",
-            //                       Value::Integer(perf_dump.filestore.journal_latency.sum as i64));
-            // measurement.add_field("apply_latency",
-            //                       Value::Integer(perf_dump.filestore.apply_latency.sum as i64));
-            // measurement.add_field("queue_transaction_latency_avg",
-            //                       Value::Integer(perf_dump.filestore.queue_transaction_latency_avg.sum as i64));
-
             communication::send_to_influx(args, measurement);
         }
     }
@@ -104,37 +77,51 @@ pub mod mon_perf {
     }
 
     fn to_carbon_string(perf_dump: &::ceph::mon::perf_dump::PerfDump, root_key: &String) -> String {
-//         format!(r#"{root_key}.{} {} {timestamp}
-// {root_key}.{} {} {timestamp}
-// {root_key}.{} {} {timestamp}
-// {root_key}.{} {} {timestamp}
-// {root_key}.{} {} {timestamp}
-// {root_key}.{} {} {timestamp}
-// {root_key}.{} {} {timestamp}
-// {root_key}.{} {} {timestamp}
-// {root_key}.{} {} {timestamp}
-// "#,
-//                 "load_avg",
-//                 perf_dump.osd.loadavg,
-//                 "op_latency",
-//                 perf_dump.osd.op_latency.sum,
-//                 "op_r_latency",
-//                 perf_dump.osd.op_r_latency.sum,
-//                 "op_w_latency",
-//                 perf_dump.osd.op_w_latency.sum,
-//                 "subop_latency",
-//                 perf_dump.osd.subop_latency.sum,
-//                 "subop_w_latency",
-//                 perf_dump.osd.subop_w_latency.sum,
-//                 "journal_latency",
-//                 perf_dump.filestore.journal_latency.sum,
-//                 "apply_latency",
-//                 perf_dump.filestore.apply_latency.sum,
-//                 "queue_transaction_latency_avg",
-//                 perf_dump.filestore.queue_transaction_latency_avg.sum,
-//                 root_key = format!("{}-osd.{}",root_key.clone(), osd_num),
-//                 timestamp = get_time() / 1000.0)
-        "".to_string()
+        format!(r#"{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+{root_key}.{} {} {timestamp}
+"#,
+                "used",
+                perf_dump.cluster.osd_kb_used,
+                "avail",
+                perf_dump.cluster.osd_kb_avail,
+                "total",
+                perf_dump.cluster.osd_kb,
+                "osds",
+                perf_dump.cluster.num_osd,
+                "osds_up",
+                perf_dump.cluster.num_osd_up,
+                "osds_in",
+                perf_dump.cluster.num_osd_in,
+                "osd_epoch",
+                perf_dump.cluster.osd_epoch,
+                "pgs",
+                perf_dump.cluster.num_pg,
+                "pgs_active",
+                perf_dump.cluster.num_pg_active,
+                "pgs_active_clean",
+                perf_dump.cluster.num_pg_active_clean,
+                "pgs_peering",
+                perf_dump.cluster.num_pg_peering,
+                "objects",
+                perf_dump.cluster.num_object,
+                "objects_unfound",
+                perf_dump.cluster.num_object_unfound,
+                "objects_degraded",
+                perf_dump.cluster.num_object_degraded,
+                root_key = root_key.clone(),
+                timestamp = super::get_time() / 1000.0)
     }
 }
 pub mod osd_perf {
