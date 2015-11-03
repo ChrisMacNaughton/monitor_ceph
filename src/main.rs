@@ -104,7 +104,7 @@ fn main() {
 
     simple_logger::init_with_level(args.log_level.clone()).unwrap();
 
-    let periodic = timer_periodic(5000);
+    let periodic = timer_periodic(1000);
 
     let mut is_monitor = check_is_monitor();
 
