@@ -11,14 +11,11 @@ extern crate ceph;
 // std
 use std::str::FromStr;
 use std::path::Path;
-use std::process::Command;
 use std::sync::mpsc::Receiver;
 use std::fs;
-use std::io::prelude::*;
 
 // modules
 mod logging;
-mod health;
 mod communication;
 
 // crates
@@ -28,22 +25,6 @@ use ceph::*;
 
 fn get_config() -> output_args::Args {
     output_args::get_args()
-}
-
-fn get_ceph_stats() -> Result<String, String> {
-    //return Ok("{\"health\":{\"health\":{\"health_services\":[{\"mons\":[{\"name\":\"chris-local-machine-1\",\"kb_total\":232205304,\"kb_used\":81823684,\"kb_avail\":138563228,\"avail_percent\":59,\"last_updated\":\"2015-10-07 12:19:51.281273\",\"store_stats\":{\"bytes_total\":5408347,\"bytes_sst\":0,\"bytes_log\":4166001,\"bytes_misc\":1242346,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"},{\"name\":\"chris-local-machine-2\",\"kb_total\":232205304,\"kb_used\":79803236,\"kb_avail\":140583676,\"avail_percent\":60,\"last_updated\":\"2015-10-07 12:19:23.247120\",\"store_stats\":{\"bytes_total\":6844874,\"bytes_sst\":0,\"bytes_log\":5602535,\"bytes_misc\":1242339,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"},{\"name\":\"chris-local-machine-3\",\"kb_total\":232205304,\"kb_used\":78650196,\"kb_avail\":141736716,\"avail_percent\":61,\"last_updated\":\"2015-10-07 12:19:07.182466\",\"store_stats\":{\"bytes_total\":6531182,\"bytes_sst\":0,\"bytes_log\":5288894,\"bytes_misc\":1242288,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"}]}]},\"summary\":[],\"timechecks\":{\"epoch\":6,\"round\":38,\"round_status\":\"finished\",\"mons\":[{\"name\":\"chris-local-machine-1\",\"skew\":\"0.000000\",\"latency\":\"0.000000\",\"health\":\"HEALTH_OK\"},{\"name\":\"chris-local-machine-2\",\"skew\":\"0.000000\",\"latency\":\"0.000977\",\"health\":\"HEALTH_OK\"},{\"name\":\"chris-local-machine-3\",\"skew\":\"0.000000\",\"latency\":\"0.000818\",\"health\":\"HEALTH_OK\"}]},\"overall_status\":\"HEALTH_OK\",\"detail\":[]},\"fsid\":\"1bb15abc-4158-11e5-b499-00151737cf98\",\"election_epoch\":6,\"quorum\":[0,1,2],\"quorum_names\":[\"chris-local-machine-1\",\"chris-local-machine-2\",\"chris-local-machine-3\"],\"monmap\":{\"epoch\":2,\"fsid\":\"1bb15abc-4158-11e5-b499-00151737cf98\",\"modified\":\"2015-10-07 10:45:23.255204\",\"created\":\"0.000000\",\"mons\":[{\"rank\":0,\"name\":\"chris-local-machine-1\",\"addr\":\"10.0.2.22:6789/0\"},{\"rank\":1,\"name\":\"chris-local-machine-2\",\"addr\":\"10.0.2.78:6789/0\"},{\"rank\":2,\"name\":\"chris-local-machine-3\",\"addr\":\"10.0.2.141:6789/0\"}]},\"osdmap\":{\"osdmap\":{\"epoch\":9,\"num_osds\":3,\"num_up_osds\":3,\"num_in_osds\":3,\"full\":false,\"nearfull\":false}},\"pgmap\":{\"pgs_by_state\":[{\"state_name\":\"active+clean\",\"count\":192}],\"version\":487,\"num_pgs\":192,\"data_bytes\":4970896648,\"bytes_used\":252251439104,\"bytes_avail\":424777154560,\"bytes_total\":713334693888,\"write_bytes_sec\":26793300,\"op_per_sec\":8},\"mdsmap\":{\"epoch\":1,\"up\":0,\"in\":0,\"max\":1,\"by_rank\":[]}}".to_string());
-    //return Ok("{\"health\":{\"health\":{\"health_services\":[{\"mons\":[{\"name\":\"ip-172-31-3-4\",\"kb_total\":257899908,\"kb_used\":2646276,\"kb_avail\":244667856,\"avail_percent\":94,\"last_updated\":\"2015-10-21 17:29:49.157456\",\"store_stats\":{\"bytes_total\":4211748,\"bytes_sst\":0,\"bytes_log\":2328812,\"bytes_misc\":1882936,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"},{\"name\":\"ip-172-31-18-59\",\"kb_total\":257899908,\"kb_used\":2626376,\"kb_avail\":244687756,\"avail_percent\":94,\"last_updated\":\"2015-10-21 17:29:55.825254\",\"store_stats\":{\"bytes_total\":5364733,\"bytes_sst\":0,\"bytes_log\":3481648,\"bytes_misc\":1883085,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"},{\"name\":\"ip-172-31-55-150\",\"kb_total\":257899908,\"kb_used\":2732484,\"kb_avail\":244581648,\"avail_percent\":94,\"last_updated\":\"2015-10-21 17:30:22.606563\",\"store_stats\":{\"bytes_total\":5470059,\"bytes_sst\":0,\"bytes_log\":3586875,\"bytes_misc\":1883184,\"last_updated\":\"0.000000\"},\"health\":\"HEALTH_OK\"}]}]},\"summary\":[],\"timechecks\":{\"epoch\":6,\"round\":64,\"round_status\":\"finished\",\"mons\":[{\"name\":\"ip-172-31-3-4\",\"skew\":\"0.000000\",\"latency\":\"0.000000\",\"health\":\"HEALTH_OK\"},{\"name\":\"ip-172-31-18-59\",\"skew\":\"-0.001446\",\"latency\":\"0.119155\",\"health\":\"HEALTH_OK\"},{\"name\":\"ip-172-31-55-150\",\"skew\":\"-0.005493\",\"latency\":\"0.003979\",\"health\":\"HEALTH_OK\"}]},\"overall_status\":\"HEALTH_OK\",\"detail\":[]},\"fsid\":\"1bb15abc-4158-11e5-b499-00151737cf98\",\"election_epoch\":6,\"quorum\":[0,1,2],\"quorum_names\":[\"ip-172-31-3-4\",\"ip-172-31-18-59\",\"ip-172-31-55-150\"],\"monmap\":{\"epoch\":2,\"fsid\":\"1bb15abc-4158-11e5-b499-00151737cf98\",\"modified\":\"2015-10-21 14:51:21.352722\",\"created\":\"0.000000\",\"mons\":[{\"rank\":0,\"name\":\"ip-172-31-3-4\",\"addr\":\"172.31.3.4:6789/0\"},{\"rank\":1,\"name\":\"ip-172-31-18-59\",\"addr\":\"172.31.18.59:6789/0\"},{\"rank\":2,\"name\":\"ip-172-31-55-150\",\"addr\":\"172.31.55.150:6789/0\"}]},\"osdmap\":{\"osdmap\":{\"epoch\":22,\"num_osds\":8,\"num_up_osds\":8,\"num_in_osds\":8,\"full\":false,\"nearfull\":false}},\"pgmap\":{\"pgs_by_state\":[{\"state_name\":\"active+clean\",\"count\":192}],\"version\":5467,\"num_pgs\":192,\"data_bytes\":1072168960,\"bytes_used\":22150647808,\"bytes_avail\":2003846721536,\"bytes_total\":2112716046336},\"mdsmap\":{\"epoch\":1,\"up\":0,\"in\":0,\"max\":1,\"by_rank\":[]}}".to_string());
-    let output = Command::new("/usr/bin/ceph")
-                     .arg("-s")
-                     .arg("-f")
-                     .arg("json")
-                     .output()
-                     .unwrap_or_else(|e| panic!("failed to execute ceph process: {}", e));
-    let output_string = match String::from_utf8(output.stdout) {
-        Ok(v) => v,
-        Err(_) => "{}".to_string(),
-    };
-    Ok(output_string)
 }
 
 fn has_child_directory(dir: &Path) -> Result<bool, std::io::Error> {
@@ -63,7 +44,10 @@ fn check_is_monitor() -> bool {
     // does it have a mon directory entry?
     match has_child_directory(Path::new("/var/lib/ceph/mon")){
         Ok(result) => result,
-        Err(_) => false,
+        Err(_) => {
+            info!("No Monitor found");
+            false
+        }
     }
 }
 
@@ -131,38 +115,28 @@ fn main() {
     let mut i = 0;
     loop {
         i = i + 1;
-        let _ = periodic.recv();
         trace!("Going around again!");
         // Grab stats from the ceph monitor
         if is_monitor {
             trace!("Getting MON info");
-            let json = match get_ceph_stats() {
-                Ok(json) => json,
-                Err(_) => {
+            let _ = match ceph::get_monitor_perf_dump() {
+                Some(dump) => Some(logging::mon_perf::log(dump, &args)),
+                None => {
                     is_monitor = check_is_monitor();
-                    "{}".to_string()
-                },
-            };
-            trace!("Got MON JSON: {}", json);
-            let ceph_event = match health::CephHealth::decode(&json) {
-                Ok(json) => json,
-                Err(error) => {
-                    warn!("[MON] There was an error: {:?}", error);
-                    continue;
+                    None
                 }
             };
-            ceph_event.log(&args);
+            
         }
 
         //Now the osds
         for osd_num in osd_list.clone().iter(){
-            match ceph::osd_perf_dump(osd_num) {
+            match ceph::get_osd_perf_dump(osd_num) {
                 Some(osd) => {
                     logging::osd_perf::log(osd, &args, *osd_num);
                 },
                 None => continue,
             }
-            // ceph_event.log(&args, *osd_num);
         }
         osd_list = match i % 10 {
             0 => get_osds(),
@@ -172,6 +146,7 @@ fn main() {
             0 => check_is_monitor(),
             _ => is_monitor,
         };
+        let _ = periodic.recv();
     }
 }
 
