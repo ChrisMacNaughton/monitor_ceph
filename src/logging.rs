@@ -163,6 +163,8 @@ pub mod osd_perf {
                                   Value::Integer(perf_dump.filestore.journal_latency.sum as i64));
             measurement.add_field("apply_latency",
                                   Value::Integer(perf_dump.filestore.apply_latency.sum as i64));
+            measurement.add_field("commit_latency",
+                                  Value::Integer(perf_dump.filestore.commitcycle_latency.sum as i64));
             measurement.add_field("queue_transaction_latency_avg",
                                   Value::Integer(perf_dump.filestore.queue_transaction_latency_avg.sum as i64));
 
