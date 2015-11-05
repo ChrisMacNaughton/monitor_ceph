@@ -2,6 +2,20 @@ extern crate time;
 extern crate uuid;
 // extern crate output_args;
 // extern crate ceph;
+use std::process::Command;
+
+fn hostname() -> String{
+    let output = Command::new("hostname")
+                         .output()
+                         .unwrap_or_else(|e| panic!("failed to execute hostname: {}", e));
+    let host = match String::from_utf8(output.stdout) {
+        Ok(v) => v.replace("\n", ""),
+        Err(_) => "{}".to_string(),
+   };
+   trace!("Got hostname: '{}'", host);
+
+   host
+}
 
 pub mod mon_perf {
     use influent::measurement::{Measurement, Value};
@@ -17,13 +31,16 @@ pub mod mon_perf {
 
     fn log_to_stdout(perf_dump: &::ceph::mon::perf_dump::PerfDump, args: &Args) {
         if args.outputs.contains(&"stdout".to_string()) {
-            println!("{:?}", perf_dump);
+            let hostname = super::hostname();
+            println!("[{}] {:?}", hostname, perf_dump);
         }
     }
 
     fn log_to_influx(perf_dump: &::ceph::mon::perf_dump::PerfDump, args: &Args) {
         if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
+            let hostname = super::hostname();
             let mut measurement = Measurement::new("monitor");
+            measurement.add_tag("hostname", hostname.as_ref());
             // Cluster data
             measurement.add_field("used", Value::Integer(perf_dump.cluster.osd_kb_used as i64));
             measurement.add_field("avail", Value::Integer(perf_dump.cluster.osd_kb_avail as i64));
@@ -137,18 +154,25 @@ pub mod osd_perf {
 
     fn log_to_stdout(perf_dump: &::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u32) {
         if args.outputs.contains(&"stdout".to_string()) {
-            println!("osd.{}: {:?}", osd_num, perf_dump);
+            let hostname = super::hostname();
+            println!("[{}] osd.{}: {:?}", hostname, osd_num, perf_dump);
         }
     }
 
     fn log_to_influx(perf_dump: &::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u32) {
         if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
             let osd = format!("{}", osd_num.clone());
+            let hostname = super::hostname();
             let mut measurement = Measurement::new("osd");
-
+            measurement.add_tag("hostname", hostname.as_ref());
             measurement.add_tag("osd", osd.as_ref());
             measurement.add_field("load_avg",
                                   Value::Integer(perf_dump.osd.loadavg as i64));
+            measurement.add_field("op_queue_ops",
+                                  Value::Integer(perf_dump.filestore.op_queue_ops as i64));
+            measurement.add_field("ops",
+                                  Value::Integer(perf_dump.filestore.ops as i64));
+
             measurement.add_field("op_latency",
                                   Value::Integer(perf_dump.osd.op_latency.sum as i64));
             measurement.add_field("op_r_latency",
