@@ -192,6 +192,14 @@ pub mod osd_perf {
             measurement.add_field("queue_transaction_latency_avg",
                                   Value::Integer(perf_dump.filestore.queue_transaction_latency_avg.sum as i64));
 
+            // USD Space data
+            measurement.add_field("stat_bytes",
+                                  Value::Integer(perf_dump.osd.stat_bytes as i64));
+            measurement.add_field("stat_bytes_used",
+                                  Value::Integer(perf_dump.osd.stat_bytes_used as i64));
+            measurement.add_field("stat_bytes_avail",
+                                  Value::Integer(perf_dump.osd.stat_bytes_avail as i64));
+
             communication::send_to_influx(args, measurement);
         }
     }
