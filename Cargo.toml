@@ -12,4 +12,9 @@ simple_logger = "*"
 uuid = "*"
 influent = "0.2"
 output_args = {git = "https://github.com/ChrisMacNaughton/ceph_cli_args.git"}
-ceph = {git = "https://github.com/ChrisMacNaughton/ceph-rs.git"}
+# ceph = {git = "https://github.com/ChrisMacNaughton/ceph-rs.git"}
+
+[dependencies.ceph]
+git = "https://github.com/ChrisMacNaughton/ceph-rs.git"
+branch = "tmp-firefly"
+# features = ["hammer"]

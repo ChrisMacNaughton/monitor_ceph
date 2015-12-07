@@ -53,8 +53,8 @@ fn check_is_monitor() -> bool {
 
 //NOTE: This skips a lot of failure cases
 // Check for osd sockets and give back a vec of osd numbers that are active
-fn get_osds_with_match() -> Result<Vec<u32>, std::io::Error> {
-    let mut osds: Vec<u32> = Vec::new();
+fn get_osds_with_match() -> Result<Vec<u64>, std::io::Error> {
+    let mut osds: Vec<u64> = Vec::new();
 
     let osd_regex = Regex::new(r"ceph-osd.(?P<number>\d+).asok").unwrap();
 
@@ -77,7 +77,7 @@ fn get_osds_with_match() -> Result<Vec<u32>, std::io::Error> {
         match osd_regex.captures(file_name){
             Some(osd) => {
                 if let Some(osd_number) = osd.name("number"){
-                    let num = u32::from_str(osd_number).unwrap();
+                    let num = u64::from_str(osd_number).unwrap();
                     osds.push(num);
                 }
                 //Ignore failures
@@ -89,7 +89,7 @@ fn get_osds_with_match() -> Result<Vec<u32>, std::io::Error> {
     return Ok(osds);
 }
 
-fn get_osds() -> Vec<u32> {
+fn get_osds() -> Vec<u64> {
     match get_osds_with_match() {
         Ok(list) => list,
         Err(_) => {
@@ -104,7 +104,7 @@ fn main() {
 
     simple_logger::init_with_level(args.log_level.clone()).unwrap();
 
-    let periodic = timer_periodic(1000);
+    let periodic = timer_periodic(5000);
 
     let mut is_monitor = check_is_monitor();
 
@@ -133,7 +133,8 @@ fn main() {
         for osd_num in osd_list.clone().iter(){
             match ceph::get_osd_perf_dump(osd_num) {
                 Some(osd) => {
-                    logging::osd_perf::log(osd, &args, *osd_num);
+                    let drive_name = ceph::osd_mount_point(osd_num).unwrap_or("".to_string());
+                    logging::osd_perf::log(osd, &args, *osd_num, &drive_name);
                 },
                 None => continue,
             }

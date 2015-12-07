@@ -146,26 +146,27 @@ pub mod osd_perf {
     use influent::measurement::{Measurement, Value};
     use output_args::*;
 
-    pub fn log(perf_dump: ::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u32) {
-        log_to_stdout(&perf_dump, args, osd_num);
-        log_to_influx(&perf_dump, args, osd_num);
-        log_to_carbon(&perf_dump, args, osd_num);
+    pub fn log(perf_dump: ::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u64, drive_name: &String) {
+        log_to_stdout(&perf_dump, args, osd_num, drive_name);
+        log_to_influx(&perf_dump, args, osd_num, drive_name);
+        log_to_carbon(&perf_dump, args, osd_num, drive_name);
     }
 
-    fn log_to_stdout(perf_dump: &::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u32) {
+    fn log_to_stdout(perf_dump: &::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u64, drive_name: &String) {
         if args.outputs.contains(&"stdout".to_string()) {
             let hostname = super::hostname();
-            println!("[{}] osd.{}: {:?}", hostname, osd_num, perf_dump);
+            println!("[{}] osd.{}({}): {:?}", hostname, osd_num, drive_name, perf_dump);
         }
     }
 
-    fn log_to_influx(perf_dump: &::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u32) {
+    fn log_to_influx(perf_dump: &::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u64, drive_name: &String) {
         if args.outputs.contains(&"influx".to_string()) && args.influx.is_some() {
             let osd = format!("{}", osd_num.clone());
             let hostname = super::hostname();
             let mut measurement = Measurement::new("osd");
             measurement.add_tag("hostname", hostname.as_ref());
             measurement.add_tag("osd", osd.as_ref());
+            measurement.add_tag("drive", drive_name.as_ref());
             measurement.add_field("load_avg",
                                   Value::Integer(perf_dump.osd.loadavg as i64));
             measurement.add_field("op_queue_ops",
@@ -174,23 +175,23 @@ pub mod osd_perf {
                                   Value::Integer(perf_dump.filestore.ops as i64));
 
             measurement.add_field("op_latency",
-                                  Value::Integer(perf_dump.osd.op_latency.sum as i64));
+                                  Value::Float(perf_dump.osd.op_latency.sum));
             measurement.add_field("op_r_latency",
-                                  Value::Integer(perf_dump.osd.op_r_latency.sum as i64));
+                                  Value::Float(perf_dump.osd.op_r_latency.sum));
             measurement.add_field("op_w_latency",
-                                  Value::Integer(perf_dump.osd.op_w_latency.sum as i64));
+                                  Value::Float(perf_dump.osd.op_w_latency.sum));
             measurement.add_field("subop_latency",
-                                  Value::Integer(perf_dump.osd.subop_latency.sum as i64));
+                                  Value::Float(perf_dump.osd.subop_latency.sum));
             measurement.add_field("subop_w_latency",
-                                  Value::Integer(perf_dump.osd.subop_w_latency.sum as i64));
+                                  Value::Float(perf_dump.osd.subop_w_latency.sum));
             measurement.add_field("journal_latency",
-                                  Value::Integer(perf_dump.filestore.journal_latency.sum as i64));
+                                  Value::Float(perf_dump.filestore.journal_latency.sum));
             measurement.add_field("apply_latency",
-                                  Value::Integer(perf_dump.filestore.apply_latency.sum as i64));
+                                  Value::Float(perf_dump.filestore.apply_latency.sum));
             measurement.add_field("commit_latency",
-                                  Value::Integer(perf_dump.filestore.commitcycle_latency.sum as i64));
+                                  Value::Float(perf_dump.filestore.commitcycle_latency.sum));
             measurement.add_field("queue_transaction_latency_avg",
-                                  Value::Integer(perf_dump.filestore.queue_transaction_latency_avg.sum as i64));
+                                  Value::Float(perf_dump.filestore.queue_transaction_latency_avg.sum));
 
             // USD Space data
             measurement.add_field("stat_bytes",
@@ -205,7 +206,7 @@ pub mod osd_perf {
     }
 
 
-    fn log_to_carbon(perf_dump: &::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u32) {
+    fn log_to_carbon(perf_dump: &::ceph::osd::perf_dump::PerfDump, args: &Args, osd_num: u64, drive_name: &String) {
         if args.outputs.contains(&"carbon".to_string()) && args.carbon.is_some() {
             let carbon = &args.carbon.clone().unwrap();
             let carbon_data = to_carbon_string(perf_dump, &carbon.root_key, osd_num);
@@ -213,7 +214,7 @@ pub mod osd_perf {
         }
     }
 
-    fn to_carbon_string(perf_dump: &::ceph::osd::perf_dump::PerfDump, root_key: &String, osd_num: u32) -> String {
+    fn to_carbon_string(perf_dump: &::ceph::osd::perf_dump::PerfDump, root_key: &String, osd_num: u64) -> String {
         format!(r#"{root_key}.{} {} {timestamp}
 {root_key}.{} {} {timestamp}
 {root_key}.{} {} {timestamp}
