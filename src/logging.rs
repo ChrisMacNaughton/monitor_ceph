@@ -1,5 +1,6 @@
 extern crate time;
 extern crate uuid;
+extern crate hyper;
 // extern crate output_args;
 // extern crate ceph;
 use std::process::Command;
@@ -15,6 +16,40 @@ fn hostname() -> String{
    trace!("Got hostname: '{}'", host);
 
    host
+}
+
+pub mod json {
+    use output_args::*;
+    use hyper::*;
+    pub fn log(json_str: String, args: &Args) {
+        if args.influx.is_none()
+        {
+            return;
+        }
+        let influx = &args.influx.clone().unwrap();
+        let client = Client::new();
+        let host_string = format!("http://{}:{}/record_ceph", influx.host, influx.port);
+        let host: &str = host_string.as_ref();
+        let body: &str = json_str.as_ref();
+        client.post(host)
+            .body(body)
+            .send();
+    }
+
+    pub fn log_osd(json_str: String, args: &Args, osd_num: u64, drive_name: &String) {
+        if args.influx.is_none()
+        {
+            return;
+        }
+        let influx = &args.influx.clone().unwrap();
+        let client = Client::new();
+        let host_string = format!("http://{}:{}/record_ceph?osd_num={}&drive_name={}", influx.host, influx.port, osd_num, drive_name);
+        let host: &str = host_string.as_ref();
+        let body: &str = json_str.as_ref();
+        client.post(host)
+            .body(body)
+            .send();
+    }
 }
 
 pub mod mon_perf {

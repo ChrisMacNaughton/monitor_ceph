@@ -7,6 +7,7 @@ extern crate rustc_serialize;
 extern crate simple_logger;
 extern crate time;
 extern crate ceph;
+extern crate hyper;
 
 // std
 use std::str::FromStr;
@@ -119,8 +120,11 @@ fn main() {
         // Grab stats from the ceph monitor
         if is_monitor {
             trace!("Getting MON info");
-            let _ = match ceph::get_monitor_perf_dump() {
-                Some(dump) => Some(logging::mon_perf::log(dump, &args)),
+            let _: Option<String> = match ceph::get_monitor_perf_dump_raw() {
+                Some(dump) => {
+                    logging::json::log(dump, &args);
+                    None
+                },
                 None => {
                     is_monitor = check_is_monitor();
                     None
@@ -131,10 +135,12 @@ fn main() {
 
         //Now the osds
         for osd_num in osd_list.clone().iter(){
-            match ceph::get_osd_perf_dump(osd_num) {
+            // match ceph::get_osd_perf_dump(osd_num) {
+            match ceph::get_osd_perf_dump_raw(osd_num) {
                 Some(osd) => {
                     let drive_name = ceph::osd_mount_point(osd_num).unwrap_or("".to_string());
-                    logging::osd_perf::log(osd, &args, *osd_num, &drive_name);
+                    // logging::osd_perf::log(osd, &args, *osd_num, &drive_name);
+                    logging::json::log_osd(osd, &args, *osd_num, &drive_name);
                 },
                 None => continue,
             }
