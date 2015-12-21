@@ -19,6 +19,7 @@ fn hostname() -> String{
 }
 
 pub mod json {
+    use hyper::header::ContentType;
     use output_args::*;
     use hyper::*;
     pub fn log(json_str: String, args: &Args) {
@@ -27,13 +28,12 @@ pub mod json {
             return;
         }
         let influx = &args.influx.clone().unwrap();
-        let client = Client::new();
-        let host_string = format!("http://{}:{}/record_ceph", influx.host, influx.port);
+        
+        let host_string = format!("http://{}:{}/record_ceph?measurement=monitor&hostname={}", influx.host, influx.port, super::hostname());
         let host: &str = host_string.as_ref();
         let body: &str = json_str.as_ref();
-        client.post(host)
-            .body(body)
-            .send();
+        
+        send(host, body);
     }
 
     pub fn log_osd(json_str: String, args: &Args, osd_num: u64, drive_name: &String) {
@@ -42,12 +42,18 @@ pub mod json {
             return;
         }
         let influx = &args.influx.clone().unwrap();
-        let client = Client::new();
-        let host_string = format!("http://{}:{}/record_ceph?osd_num={}&drive_name={}", influx.host, influx.port, osd_num, drive_name);
+        let host_string = format!("http://{}:{}/record_ceph?measurement=osd&osd_num={}&drive_name={}&hostname={}", influx.host, influx.port, osd_num, drive_name, super::hostname());
         let host: &str = host_string.as_ref();
         let body: &str = json_str.as_ref();
-        client.post(host)
+        
+        send(host, body);
+    }
+
+    fn send(url: &str, body: &str) {
+        let client = Client::new();
+        client.post(url)
             .body(body)
+            .header(ContentType::json())
             .send();
     }
 }
