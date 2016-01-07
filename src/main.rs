@@ -17,15 +17,22 @@ use std::fs;
 
 // modules
 mod logging;
-mod communication;
 
 // crates
 use output_args::*;
 use regex::Regex;
 use ceph::*;
 
+fn version() -> String {
+    format!("{}.{}.{}{}",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        env!("CARGO_PKG_VERSION_MINOR"),
+        env!("CARGO_PKG_VERSION_PATCH"),
+        option_env!("CARGO_PKG_VERSION_PRE").unwrap_or(""))
+}
+
 fn get_config() -> output_args::Args {
-    output_args::get_args()
+    output_args::get_args("monitor_ceph", &version())
 }
 
 fn has_child_directory(dir: &Path) -> Result<bool, std::io::Error> {
