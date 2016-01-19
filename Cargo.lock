@@ -6,7 +6,7 @@ dependencies = [
  "hyper 0.6.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "influent 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "output_args 0.1.0 (git+https://github.com/ChrisMacNaughton/ceph_cli_args.git)",
+ "output_args 1.0.0 (git+https://github.com/ChrisMacNaughton/ceph_cli_args.git)",
  "regex 0.1.46 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "simple_logger 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -241,8 +241,8 @@ dependencies = [
 
 [[package]]
 name = "output_args"
-version = "0.1.0"
-source = "git+https://github.com/ChrisMacNaughton/ceph_cli_args.git#704076765e87286bb2724479e0e2301172e2005b"
+version = "1.0.0"
+source = "git+https://github.com/ChrisMacNaughton/ceph_cli_args.git#2f449b8db9e1fd7147637b36e5355b927c96d272"
 dependencies = [
  "clap 1.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
